@@ -2,11 +2,23 @@ import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
 import { sheetIds } from '@/config/roles';
 
+
+const getGCPCredentials = () => {
+
+  if (process.env.GCP_PRIVATE_KEY) {
+    return {
+      credentials: {
+        client_email: process.env.GCP_SERVICE_ACCOUNT_EMAIL,
+        private_key: process.env.GCP_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      },
+      projectId: process.env.GCP_PROJECT_ID,
+    };
+  }
+  return {};
+};
+
 const auth = new google.auth.GoogleAuth({
-  credentials: {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-  },
+  ...getGCPCredentials(),
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
@@ -24,7 +36,7 @@ export async function GET(request) {
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'A1:B10',  // Ajusta este rango según tus necesidades
+      range: 'A1:B10',
     });
 
     return NextResponse.json(response.data.values || []);
@@ -45,7 +57,7 @@ export async function POST(request) {
   try {
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
-      range: 'A:B',  // Ajusta este rango según tus necesidades
+      range: 'A:B',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [values] },
     });
