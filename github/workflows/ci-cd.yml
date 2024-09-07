@@ -1,0 +1,39 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - test
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint code
+        run: npm run lint
+
+      - name: Build project
+        run: npm run build
+
+      - name: Deploy to Test Environment
+        if: github.ref == 'refs/heads/test'
+        run: |
+          echo "Deploying to test environment"
+
+
+      - name: Deploy to Production Environment
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "Deploying to production environment"
