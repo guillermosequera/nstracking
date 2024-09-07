@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { getUserRole, workerRoles } from '@/config/roles';
 import Link from 'next/link';
+import AdminDashboard from '@/components/AdminDashboard';
 
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const [sheetData, setSheetData] = useState({});
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -17,6 +19,7 @@ export default function AdminPage() {
   }, [session]);
 
   async function fetchAllSheetData() {
+    setLoading(true);
     try {
       const allData = {};
       for (const role of workerRoles) {
@@ -28,7 +31,9 @@ export default function AdminPage() {
       setError('');
     } catch (error) {
       console.error('Error fetching sheet data:', error);
-      setError('Error fetching sheet data. Check console for details.');
+      setError('Error fetching sheet data. Please try again later.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -39,28 +44,12 @@ export default function AdminPage() {
   if (userRole !== 'admin') return <p>Access Denied. Admin only.</p>;
 
   return (
-    <div>
-      <h1>Admin Dashboard</h1>
-      <p>Signed in as {session.user.email}</p>
-      <Link href="/status">Go to Status Page</Link>
-
-      {error && <p style={{color: 'red'}}>{error}</p>}
-
-      <h2>All Sheet Data</h2>
-      {Object.entries(sheetData).map(([role, data]) => (
-        <div key={role}>
-          <h3>{role}</h3>
-          {data.length > 0 ? (
-            <ul>
-              {data.map((row, index) => (
-                <li key={index}>{row.join(', ')}</li>
-              ))}
-            </ul>
-          ) : (
-            <p>No data available</p>
-          )}
-        </div>
-      ))}
-    </div>
+    <AdminDashboard
+      session={session}
+      sheetData={sheetData}
+      loading={loading}
+      error={error}
+      onRefresh={fetchAllSheetData}
+    />
   );
 }
