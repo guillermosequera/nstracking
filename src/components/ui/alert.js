@@ -1,7 +1,7 @@
 // src/components/ui/alert.js
 import React from 'react'
 
-export function Alert({ children, variant = 'default', className = '', ...props }) {
+function Alert({ children, variant = 'default', className = '', ...props }) {
   const baseStyles = 'p-4 rounded-md'
   const variantStyles = {
     default: 'bg-blue-100 text-blue-700',
@@ -22,3 +22,5 @@ export function AlertDescription({ children, className = '', ...props }) {
     </div>
   )
 }
+
+export { Alert, AlertDescription };
