@@ -15,7 +15,7 @@ function Alert({ children, variant = 'default', className = '', ...props }) {
   )
 }
 
-export function AlertDescription({ children, className = '', ...props }) {
+function AlertDescription({ children, className = '', ...props }) {
   return (
     <div className={`text-sm ${className}`} {...props}>
       {children}
