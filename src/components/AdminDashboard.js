@@ -1,12 +1,18 @@
+'use client'
+
 import Link from 'next/link';
 
 export default function AdminDashboard({ session, sheetData, loading, error, onRefresh }) {
-  const totalEntries = Object.values(sheetData).reduce((sum, data) => sum + data.length, 0);
+  const totalEntries = sheetData && typeof sheetData === 'object'
+    ? Object.values(sheetData).reduce((sum, data) => sum + (Array.isArray(data) ? data.length : 0), 0)
+    : 0;
 
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1>
-      <p>Signed in as {session.user.email}</p>
+      {session && session.user && (
+        <p>Signed in as {session.user.email}</p>
+      )}
       <Link href="/status" className="text-blue-500 hover:underline">Go to Status Page</Link>
 
       <div className="mt-4">
@@ -23,19 +29,19 @@ export default function AdminDashboard({ session, sheetData, loading, error, onR
 
       <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title="Total Entries" value={totalEntries} />
-        {Object.entries(sheetData).map(([role, data]) => (
-          <StatCard key={role} title={`${role} Entries`} value={data.length} />
+        {sheetData && typeof sheetData === 'object' && Object.entries(sheetData).map(([role, data]) => (
+          <StatCard key={role} title={`${role} Entries`} value={Array.isArray(data) ? data.length : 0} />
         ))}
       </div>
 
       <h2 className="text-xl font-semibold mt-8 mb-4">All Sheet Data</h2>
-      {Object.entries(sheetData).map(([role, data]) => (
+      {sheetData && typeof sheetData === 'object' && Object.entries(sheetData).map(([role, data]) => (
         <div key={role} className="mb-6">
           <h3 className="text-lg font-semibold">{role}</h3>
-          {data.length > 0 ? (
+          {Array.isArray(data) && data.length > 0 ? (
             <ul className="list-disc pl-5">
               {data.map((row, index) => (
-                <li key={index}>{row.join(', ')}</li>
+                <li key={index}>{Array.isArray(row) ? row.join(', ') : String(row)}</li>
               ))}
             </ul>
           ) : (
