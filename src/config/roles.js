@@ -11,7 +11,7 @@ export const roles = {
     workerCommerce: ['commerce@example.com'],
     workerQuality: ['quality@example.com'],
     workerLabs: ['labs@example.com'],
-    workerMontage: ['opticaselen@gmail.com'],
+    workerMontage: ['italopticmontaje@gmail.com', 'italopticasistentemantencion@gmail.com'],
     workerDispatch: ['dispatch@example.com'],
   };
   
