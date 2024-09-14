@@ -1,50 +1,54 @@
 'use client'
 
 import { useSession } from 'next-auth/react';
-import { getUserRole, workerRoles } from '@/config/roles';
+import { getUserRole, adminRoles, workerRoles } from '@/config/roles';
 import Link from 'next/link';
 import LogoutButton from '@/components/LogoutButton';
 
 export default function StatusPage() {
   const { data: session, status } = useSession();
 
-  if (status === 'loading') return <p>Loading...</p>;
-  if (!session) return <p>Not signed in</p>;
+  if (status === 'loading') return <p>Cargando...</p>;
+  if (!session) return <p>No has iniciado sesión</p>;
 
   const userRole = getUserRole(session.user.email);
 
   return (
-    <div>
-      <h1>Work Status Page</h1>
-      <p>Signed in as {session.user.email}</p>
-      <p>Role: {userRole || 'No role assigned'}</p>
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-4">Página de Estado de Trabajo</h1>
+      <p className="mb-2">Conectado como: {session.user.email}</p>
+      <p className="mb-4">Rol: {userRole || 'No asignado'}</p>
       <LogoutButton />
 
-      {userRole === 'admin' && (
-        <div>
-          <h2>Admin Links</h2>
-          <Link href="/admin">Go to Admin Page</Link>
-        </div>
-      )}
+      <div className="mt-8">
+        <h2 className="text-xl font-semibold mb-4">Enlaces de Navegación</h2>
+        <ul className="space-y-2">
+          {adminRoles.includes(userRole) && (
+            <li>
+              <Link href="/admin" className="text-blue-500 hover:underline">
+                Ir a la Página de Administración
+              </Link>
+            </li>
+          )}
+          {workerRoles.includes(userRole) && (
+            <li>
+              <Link href={`/worker/${userRole.toLowerCase().replace('worker', '')}`} className="text-blue-500 hover:underline">
+                Ir a tu Página de Trabajo
+              </Link>
+            </li>
+          )}
+          <li>
+            <Link href="/" className="text-blue-500 hover:underline">
+              Volver a la Página Principal
+            </Link>
+          </li>
+        </ul>
+      </div>
 
-      {(userRole === 'admin' || workerRoles.includes(userRole)) && (
-        <div>
-          <h2>Worker Pages</h2>
-          <ul>
-            {workerRoles.map(role => (
-              <li key={role}>
-                <Link href={`/${role.toLowerCase()}`}>
-                  Go to {role.replace('worker', '')} Page
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Aquí puedes agregar la lógica para mostrar el estado de los trabajos */}
-      <h2>Work Status</h2>
-      <p>Display work status information here...</p>
+      <div className="mt-8">
+        <h2 className="text-xl font-semibold mb-4">Estado del Trabajo</h2>
+        <p>Aquí se mostrará la información sobre el estado del trabajo...</p>
+      </div>
     </div>
   );
 }

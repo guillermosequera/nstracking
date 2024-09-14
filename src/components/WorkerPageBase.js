@@ -1,89 +1,46 @@
 'use client'
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { getUserRole, sheetIds } from '@/config/roles';
-import Link from 'next/link';
-import LogoutButton from './LogoutButton';
+import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
+import { getUserRole, workerRoles } from '@/config/roles'
+import Link from 'next/link'
+import LogoutButton from './LogoutButton'
 
-export default function WorkerPageBase({ title, role }) {
-  const { data: session, status } = useSession();
-  const [sheetData, setSheetData] = useState([]);
-  const [newEntry, setNewEntry] = useState('');
-  const [error, setError] = useState('');
+export default function WorkerPageBase({ title, role, children }) {
+  const { data: session, status } = useSession()
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (session) {
-      fetchSheetData();
-    }
-  }, [session]);
+  if (status === 'loading') return <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center">Cargando...</div>
+  if (!session) return <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center">Acceso Denegado</div>
 
-  async function fetchSheetData() {
-    try {
-      const response = await fetch(`/api/sheets?role=${role}`);
-      if (!response.ok) throw new Error('Failed to fetch');
-      const data = await response.json();
-      setSheetData(data);
-      setError('');
-    } catch (error) {
-      console.error('Error fetching sheet data:', error);
-      setError('Error fetching sheet data. Check console for details.');
-    }
-  }
-
-  async function handleAppendEntry() {
-    if (newEntry) {
-      try {
-        const response = await fetch('/api/sheets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role, values: [new Date().toISOString(), newEntry] }),
-        });
-        if (!response.ok) throw new Error('Failed to append');
-        setNewEntry('');
-        fetchSheetData();
-        setError('');
-      } catch (error) {
-        console.error('Error appending to sheet:', error);
-        setError('Error appending to sheet. Check console for details.');
-      }
-    }
-  }
-
-  if (status === 'loading') return <p>Loading...</p>;
-  if (!session) return <p>Access Denied</p>;
-
-  const userRole = getUserRole(session.user.email);
+  const userRole = getUserRole(session.user.email)
+  if (!workerRoles.includes(userRole)) return <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center">Acceso Denegado. Solo para trabajadores.</div>
+  if (userRole !== role) return <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center">Acceso Denegado. Solo para {role}.</div>
 
   return (
-    <div>
-      <h1>{title}</h1>
-      <p>Signed in as {session.user.email}</p>
-      <p>Role: {userRole || 'No role assigned'}</p>
-      <Link href="/status">Go to Status Page</Link>
-      <LogoutButton />
-
-      {error && <p style={{color: 'red'}}>{error}</p>}
-
-      <h2>Sheet Data</h2>
-      {sheetData.length > 0 ? (
-        <ul>
-          {sheetData.map((row, index) => (
-            <li key={index}>{row.join(', ')}</li>
-          ))}
-        </ul>
-      ) : (
-        <p>No data available</p>
+    <div className="min-h-screen bg-black text-gray-100">
+      <header className="bg-gray-800 py-4 px-8">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-blue-800">{title}</h1>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm">
+              {session.user.email} ({userRole})
+            </span>
+            <Link href="/status" className="text-blue-400 hover:underline text-sm">
+              Estado
+            </Link>
+            <LogoutButton />
+          </div>
+        </div>
+      </header>
+      {error && (
+        <div className="max-w-6xl mx-auto mt-4 px-8">
+          <p className="text-red-500 mb-4">{error}</p>
+        </div>
       )}
-
-      <h2>Add New Entry</h2>
-      <input
-        type="text"
-        value={newEntry}
-        onChange={(e) => setNewEntry(e.target.value)}
-        placeholder="Enter new data"
-      />
-      <button onClick={handleAppendEntry}>Add to Sheet</button>
+      <main className="max-w-6xl mx-auto mt-8 px-8">
+        {children}
+      </main>
     </div>
-  );
+  )
 }

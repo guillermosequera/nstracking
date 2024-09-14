@@ -1,9 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    experimental: {
-        appDir: true
-    }
-};
-
-export default nextConfig;
+    async rewrites() {
+      return [
+        {
+          source: '/api/:path*',
+          destination: '/api/:path*',
+        },
+      ];
+    },
+  };
+  
+  export default nextConfig;
