@@ -6,7 +6,7 @@ import { fetchJobs, addJob } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 import { useSession } from 'next-auth/react'
 import SpreadsheetLink from './SpreadsheetLink'
 
