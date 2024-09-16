@@ -11,12 +11,12 @@ export const roles = {
                       'bodegacentral@italoptic.cl',
                       'bodegaitaloptic@gmail.com',
                       'bodegacentraltrento@gmail.com',
-                      'italopticasistentemantencion@gmail.com'
+                      
                     ],
     workerCommerce: ['commerce@example.com'],
     workerQuality: ['quality@example.com'],
     workerLabs: ['labs@example.com'],
-    workerMontage: ['italopticmontaje@gmail.com'],
+    workerMontage: ['italopticmontaje@gmail.com', 'italopticasistentemantencion@gmail.com'],
     workerDispatch: ['dispatch@example.com'],
   };
   
