@@ -10,8 +10,7 @@ export const roles = {
     workerWareHouse: [
                       'bodegacentral@italoptic.cl',
                       'bodegaitaloptic@gmail.com',
-                      'bodegacentraltrento@gmail.com',
-                      
+                      'bodegacentraltrento@gmail.com'
                     ],
     workerCommerce: ['commerce@example.com'],
     workerQuality: ['quality@example.com'],
