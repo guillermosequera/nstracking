@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchJobs, addJob } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useSession } from 'next-auth/react'
 import SpreadsheetLink from './SpreadsheetLink'
+import JobNumberInput from './JobNumberInput'
 
 const timeFrames = [
   { key: 'today', label: 'Hoy' },
@@ -19,9 +20,9 @@ const timeFrames = [
   { key: 'lastMonth', label: 'Mes Pasado' }
 ]
 
-const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1Y0Yc9Kt3XtwNgfl8kty87qWbroVu7cGOeGDu-LjKa_Q/edit?gid=0#gid=0'
+const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1i2MYkRhJi9NDh-uHn6GLkIaDwe7TAvZT2vYPqh8TVkA/edit?gid=0#gid=0'
 
-export default function WorkerMontageView() {
+export default function WorkerWarehouseView() {
   const [jobNumber, setJobNumber] = useState('')
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
   const queryClient = useQueryClient()
@@ -29,14 +30,14 @@ export default function WorkerMontageView() {
   const { data: session } = useSession()
 
   const { data: jobs, isLoading, refetch } = useQuery({
-    queryKey: ['jobs', activeTimeFrame],
-    queryFn: () => fetchJobs(activeTimeFrame),
+    queryKey: ['jobs', activeTimeFrame, 'warehouse'],
+    queryFn: () => fetchJobs(activeTimeFrame, 'workerWareHouse'),
     retry: 3,
     onError: handleError
   })
 
   const addJobMutation = useMutation({
-    mutationFn: (jobNumber) => addJob(jobNumber, session.user.email),
+    mutationFn: (jobNumber) => addJob(jobNumber, session.user.email, 'workerWareHouse'),
     onSuccess: (newJob) => {
       refetch()
       setJobNumber('')
@@ -45,16 +46,9 @@ export default function WorkerMontageView() {
     onError: handleError
   })
 
-  const handleSubmit = useCallback((e) => {
-    e.preventDefault()
-    if (jobNumber.length !== 8 && jobNumber.length !== 10) return
+  const handleSubmit = useCallback((jobNumber) => {
     addJobMutation.mutate(jobNumber)
-  }, [jobNumber, addJobMutation])
-
-  const handleInputChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 10)
-    setJobNumber(value)
-  }
+  }, [addJobMutation])
 
   const sortedJobs = useMemo(() => {
     return jobs ? [...jobs].sort((a, b) => new Date(b[1]) - new Date(a[1])) : []
@@ -66,25 +60,12 @@ export default function WorkerMontageView() {
 
   return (
     <div className="space-y-6 pb-16">
-      <form onSubmit={handleSubmit} className="flex justify-center">
-        <div className="flex items-center w-full max-w-md">
-          <input
-            type="text"
-            value={jobNumber}
-            onChange={handleInputChange}
-            placeholder="Número de trabajo (8 o 10 dígitos)"
-            className="flex-grow bg-gray-800 border border-gray-700 rounded-l p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
-            aria-label="Ingrese número de trabajo"
-          />
-          <button 
-            type="submit" 
-            className="bg-blue-800 text-white px-4 py-2 rounded-r hover:bg-blue-800 transition duration-200 disabled:bg-gray-600"
-            disabled={addJobMutation.isLoading || (jobNumber.length !== 8 && jobNumber.length !== 10)}
-          >
-            {addJobMutation.isLoading ? 'Agregando...' : 'Agregar'}
-          </button>
-        </div>
-      </form>
+      <JobNumberInput
+        jobNumber={jobNumber}
+        setJobNumber={setJobNumber}
+        isLoading={addJobMutation.isLoading}
+        onSubmit={handleSubmit}
+      />
 
       {error && (
         <Alert variant="destructive" className="bg-red-900 border-red-700 text-red-100">
@@ -105,7 +86,7 @@ export default function WorkerMontageView() {
               key={key}
               onClick={() => setActiveTimeFrame(key)}
               variant={activeTimeFrame === key ? "default" : "outline"}
-              className={`trnasition-all duration-200 ${activeTimeFrame === key ? "bg-blue-800 text-white" : "bg-gray-700 text-gray-400"}`}
+              className={`transition-all duration-200 ${activeTimeFrame === key ? "bg-blue-800 text-white" : "bg-gray-700 text-gray-400"}`}
             >
               {label}
             </Button>

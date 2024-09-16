@@ -27,7 +27,8 @@ export async function middleware(req) {
     if (adminRoles.includes(userRole)) {
       return NextResponse.redirect(new URL('/admin', req.url));
     } else if (workerRoles.includes(userRole)) {
-      return NextResponse.redirect(new URL(`/worker/${userRole.toLowerCase()}`, req.url));
+      const workerPath = userRole === 'workerWareHouse' ? '/worker/warehouse' : `/worker/${userRole.toLowerCase().replace('worker', '')}`;
+      return NextResponse.redirect(new URL(workerPath, req.url));
     } else {
       return NextResponse.redirect(new URL('/status', req.url));
     }
@@ -41,7 +42,7 @@ export async function middleware(req) {
   // Protect worker routes
   if (path.startsWith('/worker')) {
     const workerType = path.split('/')[2];
-    const requiredRole = `worker${workerType.charAt(0).toUpperCase() + workerType.slice(1)}`;
+    const requiredRole = workerType === 'warehouse' ? 'workerWareHouse' : `worker${workerType.charAt(0).toUpperCase() + workerType.slice(1)}`;
     if (userRole !== requiredRole && !adminRoles.includes(userRole)) {
       return NextResponse.redirect(new URL('/status', req.url));
     }

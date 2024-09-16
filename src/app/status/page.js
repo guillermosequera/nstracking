@@ -13,6 +13,17 @@ export default function StatusPage() {
 
   const userRole = getUserRole(session.user.email);
 
+  const getWorkerPageLink = (role) => {
+    switch(role) {
+      case 'workerWareHouse':
+        return '/worker/warehouse';
+      case 'workerMontage':
+        return '/worker/montage';
+      
+      default:
+        return `/worker/${role.toLowerCase().replace('worker', '')}`;
+    }
+  };
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">Página de Estado de Trabajo</h1>
@@ -32,7 +43,7 @@ export default function StatusPage() {
           )}
           {workerRoles.includes(userRole) && (
             <li>
-              <Link href={`/worker/${userRole.toLowerCase().replace('worker', '')}`} className="text-blue-500 hover:underline">
+              <Link href={getWorkerPageLink(userRole)} className="text-blue-500 hover:underline">
                 Ir a tu Página de Trabajo
               </Link>
             </li>
