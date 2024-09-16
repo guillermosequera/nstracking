@@ -15,4 +15,4 @@ function Badge({ children, variant = 'default', className = '', ...props }) {
   )
 }
 
-export { Badge };
+export default Badge;
