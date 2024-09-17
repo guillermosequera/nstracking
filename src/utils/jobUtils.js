@@ -1,7 +1,10 @@
-export const fetchJobs = async (timeFrame) => {
-  console.log(`Fetching jobs for timeFrame: ${timeFrame}`);
+export const fetchJobs = async (timeFrame, role) => {
+  console.log(`Fetching jobs for timeFrame: ${timeFrame} and role: ${role}`);
+  if (!role) {
+    throw new Error('User role is not defined');
+  }
   try {
-    const url = `/api/sheets?role=workerMontage&timeFrame=${timeFrame}`;
+    const url = `/api/sheets?role=${role}&timeFrame=${timeFrame}`;
     console.log(`Sending request to: ${url}`);
     const response = await fetch(url);
     console.log(`Received response with status: ${response.status}`);
@@ -21,14 +24,14 @@ export const fetchJobs = async (timeFrame) => {
   }
 };
 
-export const addJob = async (jobNumber, userEmail) => {
-  console.log(`Adding job: ${jobNumber} for user: ${userEmail}`);
+export const addJob = async (jobNumber, userEmail, role) => {
+  console.log(`Adding job: ${jobNumber} for user: ${userEmail} with role: ${role}`);
   try {
     const response = await fetch('/api/sheets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        role: 'workerMontage', 
+        role: role, 
         values: [jobNumber.trim(), new Date().toISOString(), userEmail] 
       }),
     });

@@ -37,9 +37,14 @@ export async function GET(request) {
 
   console.log(`Parámetros de la solicitud: role=${role}, timeFrame=${timeFrame}, sheetId=${sheetId}`);
 
+  if (!role) {
+    console.error('Rol no especificado');
+    return NextResponse.json({ error: 'Role is required' }, { status: 400 });
+  }
+
   if (!sheetId) {
     console.error(`Sheet ID no encontrado para el rol: ${role}`);
-    return NextResponse.json({ error: 'Invalid role or missing sheet ID' }, { status: 400 });
+    return NextResponse.json({ error: `Invalid role ${role}` }, { status: 400 });
   }
 
   try {
