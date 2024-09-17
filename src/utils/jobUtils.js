@@ -1,5 +1,8 @@
 export const fetchJobs = async (timeFrame, role) => {
   console.log(`Fetching jobs for timeFrame: ${timeFrame} and role: ${role}`);
+  if (!role) {
+    throw new Error('User role is not defined');
+  }
   try {
     const url = `/api/sheets?role=${role}&timeFrame=${timeFrame}`;
     console.log(`Sending request to: ${url}`);

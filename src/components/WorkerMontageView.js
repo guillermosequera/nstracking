@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchJobs, addJob } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
 import { useSession } from 'next-auth/react'
 import SpreadsheetLink from './SpreadsheetLink'
+import { getUserRole } from '@/config/roles'
 
 const timeFrames = [
   { key: 'today', label: 'Hoy' },
@@ -28,15 +29,18 @@ export default function WorkerMontageView() {
   const { handleError, error, clearError } = useJobErrors()
   const { data: session } = useSession()
 
+  const userRole = session?.user?.role || (session ? getUserRole(session.user.email) : null)
+
   const { data: jobs, isLoading, refetch } = useQuery({
-    queryKey: ['jobs', activeTimeFrame],
-    queryFn: () => fetchJobs(activeTimeFrame),
+    queryKey: ['jobs', activeTimeFrame, userRole],
+    queryFn: () => fetchJobs(activeTimeFrame, userRole),
     retry: 3,
-    onError: handleError
+    onError: handleError,
+    enabled: !!userRole
   })
 
   const addJobMutation = useMutation({
-    mutationFn: (jobNumber) => addJob(jobNumber, session.user.email),
+    mutationFn: (jobNumber) => addJob(jobNumber, session?.user?.email, userRole),
     onSuccess: (newJob) => {
       refetch()
       setJobNumber('')
@@ -105,7 +109,7 @@ export default function WorkerMontageView() {
               key={key}
               onClick={() => setActiveTimeFrame(key)}
               variant={activeTimeFrame === key ? "default" : "outline"}
-              className={`trnasition-all duration-200 ${activeTimeFrame === key ? "bg-blue-800 text-white" : "bg-gray-700 text-gray-400"}`}
+              className={`transition-all duration-200 ${activeTimeFrame === key ? "bg-blue-800 text-white" : "bg-gray-700 text-gray-400"}`}
             >
               {label}
             </Button>

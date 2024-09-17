@@ -7,12 +7,10 @@ export async function middleware(req) {
   const path = req.nextUrl.pathname;
 
   console.log('Middleware:', path, token);
-  
 
   if (path.startsWith('/auth/signin')) {
     return NextResponse.next();
   }
-
 
   if (!token) {
     return NextResponse.redirect(new URL('/auth/signin', req.url));
@@ -20,7 +18,9 @@ export async function middleware(req) {
 
   const userRole = getUserRole(token.email);
   console.log('Middleware: User Role', userRole);
-  
+
+  // Add role to token
+  token.role = userRole;
 
   // Redirect to appropriate page if user is at root
   if (path === '/') {
@@ -58,7 +58,10 @@ export async function middleware(req) {
     return NextResponse.redirect(new URL('/status', req.url));
   }
 
-  return NextResponse.next();
+  // Modify the response to include the updated token
+  const response = NextResponse.next();
+  response.headers.set('x-user-role', userRole);
+  return response;
 }
 
 export const config = {
