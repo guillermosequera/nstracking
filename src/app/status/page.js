@@ -1,15 +1,17 @@
+// src/app/status/page.js
 'use client'
 
 import { useSession } from 'next-auth/react';
 import { getUserRole, adminRoles, workerRoles } from '@/config/roles';
 import Link from 'next/link';
 import LogoutButton from '@/components/LogoutButton';
+import StatusView from '@/components/StatusView';
 
 export default function StatusPage() {
   const { data: session, status } = useSession();
 
-  if (status === 'loading') return <p>Cargando...</p>;
-  if (!session) return <p>No has iniciado sesión</p>;
+  if (status === 'loading') return <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center">Cargando...</div>;
+  if (!session) return <div className="min-h-screen bg-gray-900 text-gray-100 flex items-center justify-center">No has iniciado sesión</div>;
 
   const userRole = getUserRole(session.user.email);
 
@@ -19,47 +21,59 @@ export default function StatusPage() {
         return '/worker/warehouse';
       case 'workerMontage':
         return '/worker/montage';
-      
       default:
         return `/worker/${role.toLowerCase().replace('worker', '')}`;
     }
   };
+  
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Página de Estado de Trabajo</h1>
-      <p className="mb-2">Conectado como: {session.user.email}</p>
-      <p className="mb-4">Rol: {userRole || 'No asignado'}</p>
-      <LogoutButton />
+    <div className="min-h-screen bg-black text-gray-100">
+      <header className="bg-gray-800 py-4 px-8">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-blue-800">Estado de Trabajo</h1>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm">
+              {session.user.email} ({userRole || 'No asignado'})
+            </span>
+            <LogoutButton />
+          </div>
+        </div>
+      </header>
 
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Enlaces de Navegación</h2>
-        <ul className="space-y-2">
-          {adminRoles.includes(userRole) && (
+      <nav className="bg-gray-900 py-2">
+        <div className="max-w-6xl mx-auto px-8">
+          <ul className="flex justify-between">
             <li>
-              <Link href="/admin" className="text-blue-500 hover:underline">
-                Ir a la Página de Administración
+              <Link href="/" className="text-blue-500 hover:underline">
+                Página Principal
               </Link>
             </li>
-          )}
-          {workerRoles.includes(userRole) && (
+            {adminRoles.includes(userRole) && (
+              <li>
+                <Link href="/admin" className="text-blue-500 hover:underline">
+                  Administración
+                </Link>
+              </li>
+            )}
+            {workerRoles.includes(userRole) && (
+              <li>
+                <Link href={getWorkerPageLink(userRole)} className="text-blue-500 hover:underline">
+                  Tu Área de Trabajo
+                </Link>
+              </li>
+            )}
             <li>
-              <Link href={getWorkerPageLink(userRole)} className="text-blue-500 hover:underline">
-                Ir a tu Página de Trabajo
+              <Link href="/status" className="text-blue-500 hover:underline">
+                Status Job
               </Link>
             </li>
-          )}
-          <li>
-            <Link href="/" className="text-blue-500 hover:underline">
-              Volver a la Página Principal
-            </Link>
-          </li>
-        </ul>
-      </div>
+          </ul>
+        </div>
+      </nav>
 
-      <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Estado del Trabajo</h2>
-        <p>Aquí se mostrará la información sobre el estado del trabajo...</p>
-      </div>
+      <main className="max-w-6xl mx-auto mt-8 px-8">
+        <StatusView />
+      </main>
     </div>
   );
 }
