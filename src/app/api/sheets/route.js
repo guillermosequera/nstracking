@@ -61,7 +61,7 @@ export async function GET(request) {
     console.log(`Intentando leer datos de la hoja: ${sheetId}`);
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'A:E',
+      range: 'A:J',
     });
 
     console.log('Respuesta recibida de Google Sheets');
