@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
 import { sheetIds } from '@/config/roles';
+import { getStatusFromPage } from '@/utils/jobUtils';
+import { getCachedData, setCachedData } from '@/utils/cacheUtils';
 
 const getGCPCredentials = () => {
   console.log('Obteniendo credenciales GCP');
@@ -33,9 +35,10 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const role = searchParams.get('role');
   const timeFrame = searchParams.get('timeFrame');
+  const jobNumber = searchParams.get('jobNumber');
   const sheetId = sheetIds[role];
 
-  console.log(`Parámetros de la solicitud: role=${role}, timeFrame=${timeFrame}, sheetId=${sheetId}`);
+  console.log(`Parámetros de la solicitud: role=${role}, timeFrame=${timeFrame}, jobNumber=${jobNumber}, sheetId=${sheetId}`);
 
   if (!role) {
     console.error('Rol no especificado');
@@ -51,10 +54,14 @@ export async function GET(request) {
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
+    if (role === 'status' && jobNumber) {
+      return await getJobStatus(sheets, sheetId, jobNumber);
+    }
+
     console.log(`Intentando leer datos de la hoja: ${sheetId}`);
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'A:C',
+      range: 'A:J',
     });
 
     console.log('Respuesta recibida de Google Sheets');
@@ -65,7 +72,7 @@ export async function GET(request) {
 
     if (allValues.length === 0) {
       console.warn('No se encontraron datos en la hoja de cálculo');
-      return NextResponse.json({ message: 'No data found' }, { status: 204 });
+      return NextResponse.json([]);
     }
 
     console.log('Filtrando datos por timeFrame');
@@ -76,18 +83,44 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error en GET /api/sheets:', error);
     console.error('Stack trace:', error.stack);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
+async function getJobStatus(sheets, sheetId, jobNumber) {
+  console.log(`Buscando estado del trabajo: ${jobNumber}`);
+  
+  // Intentar obtener datos del caché
+  const cachedData = getCachedData(`jobStatus_${jobNumber}`);
+  if (cachedData) {
+    console.log(`Datos obtenidos del caché para el trabajo: ${jobNumber}`);
+    return NextResponse.json(cachedData);
+  }
+
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: 'A:E',
+  });
+
+  const allValues = response.data.values || [];
+  const jobHistory = allValues.filter(row => row[0] === jobNumber);
+
+  if (jobHistory.length === 0) {
+    return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+  }
+
+  // Guardar en caché para futuras consultas
+  setCachedData(`jobStatus_${jobNumber}`, jobHistory);
+
+  return NextResponse.json(jobHistory);
+}
 
 export async function POST(request) {
   console.log('Iniciando solicitud POST');
-  const { role, values } = await request.json();
+  const body = await request.json();
+  const { jobNumber, timestamp, userEmail, role, activePage, status } = body;
   const sheetId = sheetIds[role];
-
-  console.log(`Datos de la solicitud POST: role=${role}, values=${JSON.stringify(values)}`);
-  console.log(`Sheet ID para el rol ${role}: ${sheetId}`);
+  const statusSheetId = sheetIds['status'];
 
   if (!sheetId) {
     console.error(`Sheet ID no encontrado para el rol: ${role}`);
@@ -98,16 +131,35 @@ export async function POST(request) {
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    console.log('Intentando añadir datos a la hoja');
-    const response = await sheets.spreadsheets.values.append({
+    const values = [[jobNumber, timestamp, userEmail]];
+    const correctStatus = getStatusFromPage(activePage);
+    const statusValues = [[jobNumber, timestamp, activePage, correctStatus, userEmail]];
+
+    // Agregar a la hoja del área
+    console.log('Intentando añadir datos a la hoja del área:', values);
+    const areaResponse = await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
       range: 'A:C',
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [values] },
+      requestBody: { values },
     });
 
-    console.log('Respuesta de append:', JSON.stringify(response.data, null, 2));
-    return NextResponse.json({ newJob: values });
+    // Agregar a la hoja de estado
+    console.log('Intentando añadir datos a la hoja de estado:', statusValues);
+    const statusResponse = await sheets.spreadsheets.values.append({
+      spreadsheetId: statusSheetId,
+      range: 'A:E',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: statusValues },
+    });
+
+    console.log('Respuesta de append (área):', JSON.stringify(areaResponse.data, null, 2));
+    console.log('Respuesta de append (estado):', JSON.stringify(statusResponse.data, null, 2));
+
+    return NextResponse.json({ 
+      newJob: { jobNumber, timestamp, userEmail, status: correctStatus },
+      message: 'Job added successfully to both sheets'
+    });
   } catch (error) {
     console.error('Error en POST /api/sheets:', error);
     console.error('Stack trace:', error.stack);

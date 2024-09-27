@@ -6,7 +6,7 @@ export const roles = {
     adminFinance: ['adminFinance@example.com'],
     adminCommerce: ['adminCommerce@example.com'],
     adminRRHH: ['adminRRHH@example.com'],
-    adminAdmin: ['tecnico.ti@italoptic.cl'],
+    adminAdmin: ['adminAdmin@example.com'],
     workerWareHouse: [
                       'bodegacentral@italoptic.cl',
                       'bodegaitaloptic@gmail.com',
@@ -17,7 +17,7 @@ export const roles = {
     workerQuality: ['quality@example.com'],
     workerLabs: ['labs@example.com'],
     workerMontage: ['italopticmontaje@gmail.com'],
-    workerDispatch: ['dispatch@example.com'],
+    workerDispatch: ['dispatch@example.com', 'tecnico.ti@italoptic.cl'],
   };
   
   export const sheetIds = {
