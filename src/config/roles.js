@@ -17,7 +17,7 @@ export const roles = {
     workerQuality: ['quality@example.com'],
     workerLabs: ['labs@example.com'],
     workerMontage: ['italopticmontaje@gmail.com'],
-    workerDispatch: ['dispatch@example.com', 'tecnico.ti@italoptic.cl'],
+    workerDispatch: ['asisdepachoitaloptic@gmail.com', 'asisdepachoitaloptic2@gmail.com', 'despacho@italoptic.cl'],
   };
   
   export const sheetIds = {
