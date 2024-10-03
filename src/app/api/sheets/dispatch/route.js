@@ -35,13 +35,14 @@ export async function POST(request) {
   console.log('Datos recibidos:', body);
 
   const { jobNumber, timestamp, company, userEmail, agreement, client, invoiceNumber, shippingCompany, shippingOrder } = body;
+  const role = 'workerDispatch';
   const page = 'dispatch';
-  const sheetId = sheetIds['workerDispatch'];
+  const sheetId = sheetIds[role];
   const statusSheetId = sheetIds['status'];
 
   if (!sheetId) {
-    console.error(`Sheet ID no encontrado para la página: ${page}`);
-    return NextResponse.json({ error: 'Invalid page' }, { status: 400 });
+    console.error(`Sheet ID no encontrado para el rol: ${role}`);
+    return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
   }
 
   try {

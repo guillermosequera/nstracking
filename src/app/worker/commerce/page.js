@@ -1,7 +1,12 @@
 'use client'
 
-import WorkerPageBase from '@/components/WorkerPageBase';
+import WorkerPageBase from '@/components/WorkerPageBase'
+import WorkerCommerceView from '@/components/WorkerCommerceView'
 
-export default function WorkerWarehousePage() {
-  return <WorkerPageBase title="Worker Commerce Page" role="workerCommerce" />;
+export default function WorkerCommercePage() {
+  return (
+    <WorkerPageBase title="Worker Commerce Dashboard" role="workerCommerce">
+      <WorkerCommerceView />
+    </WorkerPageBase>
+  )
 }

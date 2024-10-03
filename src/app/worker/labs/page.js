@@ -1,7 +1,13 @@
+// src/app/worker/labs/page.js
 'use client'
 
-import WorkerPageBase from '@/components/WorkerPageBase';
+import WorkerPageBase from '@/components/WorkerPageBase'
+import WorkerLabsView from '@/components/WorkerLabsView'
 
-export default function WorkerWarehousePage() {
-  return <WorkerPageBase title="Worker Labs Page" role="workerLabs" />;
+export default function WorkerLabsPage() {
+  return (
+    <WorkerPageBase title="Worker Labs Dashboard" role="workerLabs">
+      <WorkerLabsView />
+    </WorkerPageBase>
+  )
 }

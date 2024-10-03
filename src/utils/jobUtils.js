@@ -28,7 +28,7 @@ export const fetchJobs = async (timeFrame, role) => {
 };
 
 export const addJob = async (jobNumber, userEmail, userRole, activePage) => {
-  console.log(`Adding job for user: ${userEmail} on page: ${activePage}`);
+  console.log(`Adding job for user: ${userEmail} on page: ${activePage}, role: ${userRole}`);
   const timestamp = new Date().toISOString();
   try {
     const status = getStatusFromPage(activePage);
@@ -127,12 +127,48 @@ export const fetchJobStatus = async (jobNumber) => {
   }
 };
 
+export const addJobAR = async (jobData, userEmail, userRole, activePage) => {
+  console.log(`Adding AR job for user: ${userEmail} on page: ${activePage}`);
+  const timestamp = new Date().toISOString();
+  try {
+    const status = getStatusFromPage(activePage);
+    const body = {
+      role: userRole,
+      activePage,
+      jobNumber: jobData.jobNumber.trim(),
+      crystalType: jobData.crystalType,
+      timestamp,
+      userEmail,
+      status
+    };
+
+    const response = await fetch('/api/sheets/ar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    console.log(`Received response with status: ${response.status}`);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to add AR job');
+    }
+    const data = await response.json();
+    console.log('Added new AR job:', data.newJob);
+
+    return data.newJob;
+  } catch (error) {
+    console.error('Error adding AR job:', error);
+    throw error;
+  }
+};
+
 export const getStatusFromPage = (activePage) => {
   const statusMap = {
     warehouse: 'Fuera de Bodega',
     commerce: 'Fuera de Comercial',
     quality: 'Fuera de Control de Calidad',
     labs: 'Fuera de Laboratorio',
+    labsMineral: 'Fuera de Laboratorio Mineral',
     montage: 'Fuera de Montaje',
     dispatch: 'Despachado'
   };

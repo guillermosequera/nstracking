@@ -27,7 +27,20 @@ export async function middleware(req) {
     if (adminRoles.includes(userRole)) {
       return NextResponse.redirect(new URL('/admin', req.url));
     } else if (workerRoles.includes(userRole)) {
-      const workerPath = userRole === 'workerWareHouse' ? '/worker/warehouse' : `/worker/${userRole.toLowerCase().replace('worker', '')}`;
+      let workerPath;
+      switch (userRole) {
+        case 'workerWareHouse':
+          workerPath = '/worker/warehouse';
+          break;
+        case 'workerLabsMineral':
+          workerPath = '/worker/labs-mineral';
+          break;
+        case 'workerLabsAR':
+          workerPath = '/worker/labs-ar';
+          break;
+        default:
+          workerPath = `/worker/${userRole.toLowerCase().replace('worker', '')}`;
+      }
       return NextResponse.redirect(new URL(workerPath, req.url));
     } else {
       return NextResponse.redirect(new URL('/status', req.url));
@@ -42,7 +55,20 @@ export async function middleware(req) {
   // Protect worker routes
   if (path.startsWith('/worker')) {
     const workerType = path.split('/')[2];
-    const requiredRole = workerType === 'warehouse' ? 'workerWareHouse' : `worker${workerType.charAt(0).toUpperCase() + workerType.slice(1)}`;
+    let requiredRole;
+    switch (workerType) {
+      case 'warehouse':
+        requiredRole = 'workerWareHouse';
+        break;
+      case 'labs-mineral':
+        requiredRole = 'workerLabsMineral';
+        break;
+      case 'labs-ar':
+        requiredRole = 'workerLabsAR';
+        break;
+      default:
+        requiredRole = `worker${workerType.charAt(0).toUpperCase() + workerType.slice(1)}`;
+    }
     if (userRole !== requiredRole && !adminRoles.includes(userRole)) {
       return NextResponse.redirect(new URL('/status', req.url));
     }

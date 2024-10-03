@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { useSession } from 'next-auth/react'
 import SpreadsheetLink from './SpreadsheetLink'
 import JobTable from './JobTable'
+import dispatchOptions from '@/data/dispatchOptions.json'
 
 const ACTIVE_PAGE = 'dispatch'
 const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1i4p-uWu1e6aniq-Vbq-RDciVqDZJqM4lSMd1Uv4Dp-o/edit?gid=0#gid=0'
@@ -29,16 +30,6 @@ const companyOptions = [
   { value: 'todos', label: 'Todos' },
   { value: 'trento', label: 'Trento' },
   { value: 'italoptic', label: 'Italoptic' },
-]
-
-const agreementOptions = [
-  { value: 'agreement1', label: 'Convenio 1' },
-  { value: 'agreement2', label: 'Convenio 2' },
-]
-
-const clientOptions = [
-  { value: 'client1', label: 'Cliente 1' },
-  { value: 'client2', label: 'Cliente 2' },
 ]
 
 const shippingCompanyOptions = [
@@ -204,7 +195,7 @@ export default function WorkerDispatchView() {
             <Select
               value={agreement}
               onValueChange={setAgreement}
-              options={agreementOptions}
+              options={dispatchOptions.agreementOptions}
               placeholder="Seleccione el tipo de convenio"
             />
           )}
@@ -213,7 +204,7 @@ export default function WorkerDispatchView() {
               <Select
                 value={client}
                 onValueChange={setClient}
-                options={clientOptions}
+                options={dispatchOptions.clientOptions}
                 placeholder="Seleccione el cliente"
               />
               <Input

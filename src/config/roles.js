@@ -11,11 +11,12 @@ export const roles = {
                       'bodegacentral@italoptic.cl',
                       'bodegaitaloptic@gmail.com',
                       'bodegacentraltrento@gmail.com',
-                      'italopticasistentemantencion@gmail.com'
                     ],
-    workerCommerce: ['commerce@example.com'],
+    workerCommerce: ['commerce@example.com', 'tecnico.ti@italoptic.cl'],
     workerQuality: ['quality@example.com'],
     workerLabs: ['labs@example.com'],
+    workerLabsAR: ['aritaloptic@gmail.com'],
+    workerLabsMineral: ['mineralesitaloptic@gmail.com', 'italopticasistentemantencion@gmail.com'],
     workerMontage: ['italopticmontaje@gmail.com'],
     workerDispatch: ['asisdepachoitaloptic@gmail.com', 'asisdepachoitaloptic2@gmail.com', 'despacho@italoptic.cl'],
   };
@@ -31,6 +32,8 @@ export const roles = {
     workerCommerce: process.env.NEXT_PUBLIC_SHEET_ID_COMMERCE_SHEET,
     workerQuality: process.env.NEXT_PUBLIC_SHEET_ID_QUALITY_SHEET,
     workerLabs: process.env.NEXT_PUBLIC_SHEET_ID_LABS_SHEET,
+    workerLabsMineral: process.env.NEXT_PUBLIC_SHEET_ID_LABS_MINERAL_SHEET,
+    workerLabsAR: process.env.NEXT_PUBLIC_SHEET_ID_LABS_AR_SHEET,
     workerMontage: process.env.NEXT_PUBLIC_SHEET_ID_MONTAGE_SHEET,
     workerDispatch: process.env.NEXT_PUBLIC_SHEET_ID_DISPATCH_SHEET,
     status: process.env.NEXT_PUBLIC_SHEET_ID_STATUS_SHEET,
@@ -50,6 +53,8 @@ export const roles = {
     'workerCommerce',
     'workerQuality',
     'workerLabs',
+    'workerLabsMineral',
+    'workerLabsAR',
     'workerMontage',
     'workerDispatch'
   ];

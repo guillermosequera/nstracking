@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
+import { getStatusFromPage } from '@/utils/jobUtils';
 import { sheetIds, getUserWarehouse } from '@/config/roles';
+import { getCachedData, setCachedData } from '@/utils/cacheUtils';
 
 const getGCPCredentials = () => {
   if (!process.env.GCP_PRIVATE_KEY || !process.env.GCP_SERVICE_ACCOUNT_EMAIL || !process.env.GCP_PROJECT_ID) {

@@ -37,6 +37,20 @@ export async function GET(request) {
   const timeFrame = searchParams.get('timeFrame');
   const jobNumber = searchParams.get('jobNumber');
   const sheetId = sheetIds[role];
+  
+  console.log(`Rol recibido: ${role}`); // Agregamos este log
+  
+
+  // Mapeo de roles de worker a sus correspondientes sheet IDs
+  const workerRoleMap = {
+    workerWarehouse: 'workerWareHouse',
+    workerCommerce: 'workerCommerce',
+    workerQuality: 'workerQuality',
+    workerLabs: 'workerLabs',
+    workerMontage: 'workerMontage',
+    workerDispatch: 'workerDispatch'
+  };
+
 
   console.log(`Parámetros de la solicitud: role=${role}, timeFrame=${timeFrame}, jobNumber=${jobNumber}, sheetId=${sheetId}`);
 
@@ -46,7 +60,7 @@ export async function GET(request) {
   }
 
   if (!sheetId) {
-    console.error(`Sheet ID no encontrado para el rol: ${role}`);
+    console.log(`SheetId obtenido para el rol ${role}: ${sheetId}`);
     return NextResponse.json({ error: `Invalid role ${role}` }, { status: 400 });
   }
 
@@ -85,34 +99,6 @@ export async function GET(request) {
     console.error('Stack trace:', error.stack);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
-
-async function getJobStatus(sheets, sheetId, jobNumber) {
-  console.log(`Buscando estado del trabajo: ${jobNumber}`);
-  
-  // Intentar obtener datos del caché
-  const cachedData = getCachedData(`jobStatus_${jobNumber}`);
-  if (cachedData) {
-    console.log(`Datos obtenidos del caché para el trabajo: ${jobNumber}`);
-    return NextResponse.json(cachedData);
-  }
-
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: 'A:E',
-  });
-
-  const allValues = response.data.values || [];
-  const jobHistory = allValues.filter(row => row[0] === jobNumber);
-
-  if (jobHistory.length === 0) {
-    return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-  }
-
-  // Guardar en caché para futuras consultas
-  setCachedData(`jobStatus_${jobNumber}`, jobHistory);
-
-  return NextResponse.json(jobHistory);
 }
 
 export async function POST(request) {
@@ -165,6 +151,24 @@ export async function POST(request) {
     console.error('Stack trace:', error.stack);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+}
+
+async function getJobStatus(sheets, sheetId, jobNumber) {
+  console.log(`Buscando estado del trabajo: ${jobNumber}`);
+  
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: 'A:E',
+  });
+
+  const allValues = response.data.values || [];
+  const jobHistory = allValues.filter(row => row[0] === jobNumber);
+
+  if (jobHistory.length === 0) {
+    return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+  }
+
+  return NextResponse.json(jobHistory);
 }
 
 function buildQuery(timeFrame) {
