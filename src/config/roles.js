@@ -14,7 +14,7 @@ export const roles = {
                     ],
     workerCommerce: ['commerce@example.com', 'tecnico.ti@italoptic.cl'],
     workerQuality: ['quality@example.com'],
-    workerLabs: ['labs@example.com'],
+    workerLabs: ['superficie@italoptic.cl'],
     workerLabsAR: ['aritaloptic@gmail.com'],
     workerLabsMineral: ['mineralesitaloptic@gmail.com', 'italopticasistentemantencion@gmail.com'],
     workerMontage: ['italopticmontaje@gmail.com'],
