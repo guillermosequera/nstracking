@@ -11,7 +11,7 @@ import JobTable from './JobTable'
 import TimeFrameSelector from './TimeFrameSelector'
 import { Button } from '@/components/ui/Button'
 
-const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/YOUR_AR_LABS_SHEET_ID/edit?gid=0#gid=0'
+const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1FCZrQdI62cLWKNo-TZanh-56DBxIFriNEO-yOjCHTMI/edit?gid=0#gid=0'
 const COLUMNS = ['Número de Trabajo', 'Fecha y Hora', 'Tipo de Cristal', 'Usuario']
 const ACTIVE_PAGE = 'labsAR'
 
