@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchJobs, addJob } from '@/utils/jobUtils'
+import { fetchJobs } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -10,12 +10,21 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
 import { useSession } from 'next-auth/react'
 import SpreadsheetLink from './SpreadsheetLink'
-import JobTable from './JobTable'
+import DriveFolderLink from './DriveFolderLink'
+import CommerceJobTable from './CommerceJobTable'
 import TimeFrameSelector from './TimeFrameSelector'
+import { getUserRole } from '@/config/roles'
 
 const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/11gPVktoCBHimINlJiNczAY4oiAeTLMGAHq8inxusF_w/edit?gid=0#gid=0'
+const DRIVE_FOLDER_URL = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_URL
 const COLUMNS = ['Número de Trabajo', 'Fecha y Hora', 'Fecha de Entrega', 'Número de Lensware', 'Archivo', 'Usuario']
 const ACTIVE_PAGE = 'commerce'
+
+const shortenAndLinkify = (url) => {
+  if (!url) return 'No disponible';
+  const fileName = url.split('/').pop();
+  return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">Ver ${fileName}</a>`;
+};
 
 export default function WorkerCommerceView() {
   const [jobNumber, setJobNumber] = useState('')
@@ -23,44 +32,44 @@ export default function WorkerCommerceView() {
   const [lenswareNumber, setLenswareNumber] = useState('')
   const [file, setFile] = useState(null)
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
+  const [pastedImagePreview, setPastedImagePreview] = useState(null)
+  const formRef = useRef(null)
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
   const { data: session } = useSession()
 
+  const userRole = session?.user?.role || (session ? getUserRole(session.user.email) : null)
+
   const { data: jobs, isLoading, refetch } = useQuery({
-    queryKey: ['jobs', activeTimeFrame, 'workerCommerce'],
-    queryFn: () => fetchJobs(activeTimeFrame, 'workerCommerce'),
+    queryKey: ['jobs', activeTimeFrame, userRole],
+    queryFn: () => fetchJobs(activeTimeFrame, userRole),
     retry: 3,
-    onError: handleError
+    onError: handleError,
+    enabled: !!userRole
   })
 
-  const uploadFileMutation = useMutation({
-    mutationFn: async (formData) => {
+  const addJobMutation = useMutation({
+    mutationFn: async (jobData) => {
+      const formData = new FormData();
+      if (file) {
+        formData.append('file', file);
+      }
+      formData.append('jobNumber', jobData.jobNumber);
+      formData.append('deliveryDate', jobData.deliveryDate);
+      formData.append('lenswareNumber', jobData.lenswareNumber);
+
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
+
       if (!response.ok) {
-        throw new Error('Failed to upload file');
+        throw new Error('Failed to upload file and add job');
       }
+
       return response.json();
     },
-    onError: handleError,
-  });
-
-  const addJobMutation = useMutation({
-    mutationFn: async (jobData) => {
-      let fileLink = '';
-      if (file) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('jobNumber', jobData.jobNumber);
-        const uploadResult = await uploadFileMutation.mutateAsync(formData);
-        fileLink = uploadResult.fileLink;
-      }
-      return addJob({ ...jobData, fileLink }, session?.user?.email, 'workerCommerce', ACTIVE_PAGE);
-    },
-    onSuccess: (newJob) => {
+    onSuccess: () => {
       refetch();
       resetForm();
       clearError();
@@ -73,11 +82,16 @@ export default function WorkerCommerceView() {
     setDeliveryDate('')
     setLenswareNumber('')
     setFile(null)
+    setPastedImagePreview(null)
   }
 
   const handleSubmit = useCallback((e) => {
     e.preventDefault()
     if (jobNumber.length !== 8 && jobNumber.length !== 10) return
+    if (!file && !pastedImagePreview) {
+      handleError(new Error('Por favor, seleccione o pegue un archivo'));
+      return;
+    }
     
     const jobData = {
       jobNumber,
@@ -86,7 +100,7 @@ export default function WorkerCommerceView() {
     }
     
     addJobMutation.mutate(jobData)
-  }, [jobNumber, deliveryDate, lenswareNumber, file, addJobMutation])
+  }, [jobNumber, deliveryDate, lenswareNumber, file, pastedImagePreview, addJobMutation, handleError])
 
   const handleJobNumberChange = (e) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 10)
@@ -94,12 +108,36 @@ export default function WorkerCommerceView() {
   }
 
   const handleFileChange = (e) => {
-    setFile(e.target.files[0])
+    const selectedFile = e.target.files[0]
+    setFile(selectedFile)
+    setPastedImagePreview(null)
   }
 
+  const handlePaste = useCallback((e) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const blob = items[i].getAsFile();
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setPastedImagePreview(event.target.result);
+        };
+        reader.readAsDataURL(blob);
+        setFile(new File([blob], "pasted_image.png", { type: "image/png" }));
+        break;
+      }
+    }
+  }, []);
+
   const sortedJobs = useMemo(() => {
-    return jobs ? [...jobs].sort((a, b) => new Date(b[1]) - new Date(a[1])) : []
-  }, [jobs])
+    if (!jobs) return [];
+    return jobs
+      .map(job => {
+        const fileLink = shortenAndLinkify(job[4]);
+        return [...job.slice(0, 4), fileLink, ...job.slice(5)];
+      })
+      .sort((a, b) => new Date(b[1]) - new Date(a[1]));
+  }, [jobs]);
 
   const completedJobsCount = sortedJobs.length
 
@@ -107,7 +145,7 @@ export default function WorkerCommerceView() {
 
   return (
     <div className="space-y-6 pb-16">
-      <form onSubmit={handleSubmit} className="space-y-4 bg-gray-900 p-4 rounded-lg">
+      <form onSubmit={handleSubmit} className="space-y-4 bg-gray-900 p-4 rounded-lg" ref={formRef} onPaste={handlePaste}>
         <div className="flex items-center w-full max-w-md mx-auto">
           <Input
             type="text"
@@ -119,7 +157,7 @@ export default function WorkerCommerceView() {
           <Button 
             type="submit" 
             className="bg-blue-800 text-white px-4 py-2 rounded-r hover:bg-blue-700 transition duration-200 disabled:bg-gray-600"
-            disabled={addJobMutation.isLoading || (jobNumber.length !== 8 && jobNumber.length !== 10)}
+            disabled={addJobMutation.isLoading || (jobNumber.length !== 8 && jobNumber.length !== 10) || (!file && !pastedImagePreview)}
           >
             {addJobMutation.isLoading ? 'Agregando...' : 'Agregar'}
           </Button>
@@ -143,6 +181,12 @@ export default function WorkerCommerceView() {
             onChange={handleFileChange}
             className="bg-gray-800 border border-gray-700 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
           />
+          {pastedImagePreview && (
+            <div className="mt-2">
+              <p className="text-sm text-gray-300 mb-1">Imagen pegada:</p>
+              <img src={pastedImagePreview} alt="Pasted" className="max-w-full h-auto" />
+            </div>
+          )}
         </div>
       </form>
 
@@ -161,7 +205,7 @@ export default function WorkerCommerceView() {
       <TimeFrameSelector activeTimeFrame={activeTimeFrame} setActiveTimeFrame={setActiveTimeFrame} />
 
       <div className="overflow-x-auto bg-gray-900 rounded-lg shadow">
-        <JobTable 
+        <CommerceJobTable 
           title={`Trabajos de ${activeTimeFrame}`} 
           jobs={sortedJobs}
           columns={COLUMNS}
@@ -169,6 +213,7 @@ export default function WorkerCommerceView() {
       </div>
 
       <SpreadsheetLink href={SPREADSHEET_URL} />
+      <DriveFolderLink href={DRIVE_FOLDER_URL} />
     </div>
   )
 }
