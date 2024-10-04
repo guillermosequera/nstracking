@@ -41,10 +41,17 @@ export default function WorkerCommerceView() {
 
   useEffect(() => {
     if (session?.user?.email) {
-      const role = getUserRole(session.user.email)
-      setUserRole(role)
+      try {
+        const role = getUserRole(session.user.email);
+        if (!role) {
+          throw new Error('No se pudo obtener el rol');
+        }
+        setUserRole(role);
+      } catch (err) {
+        handleError(err);
+      }
     }
-  }, [session])
+  }, [session, handleError]);
 
   const { data: jobs, isLoading, refetch } = useQuery({
     queryKey: ['jobs', activeTimeFrame, userRole],
@@ -60,7 +67,18 @@ export default function WorkerCommerceView() {
         throw new Error('No se ha iniciado sesión');
       }
       const formData = new FormData();
-      if (file) {
+      if (pastedImagePreview) {
+        const base64Image = pastedImagePreview.split(',')[1];
+        const byteCharacters = atob(base64Image);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'image/png' });
+        const pastedFile = new File([blob], "pasted_image.png", { type: "image/png" });
+        formData.append('file', pastedFile);
+      } else if (file) {
         formData.append('file', file);
       }
       formData.append('jobNumber', jobData.jobNumber);
@@ -73,7 +91,8 @@ export default function WorkerCommerceView() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to upload file and add job');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to upload file and add job');
       }
 
       return response.json();
