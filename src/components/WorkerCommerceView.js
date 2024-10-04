@@ -36,7 +36,7 @@ export default function WorkerCommerceView() {
   const formRef = useRef(null)
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
 
   const userRole = session?.user?.role || (session ? getUserRole(session.user.email) : null)
 
@@ -50,6 +50,9 @@ export default function WorkerCommerceView() {
 
   const addJobMutation = useMutation({
     mutationFn: async (jobData) => {
+      if (!session?.user?.email) {
+        throw new Error('No se ha iniciado sesión');
+      }
       const formData = new FormData();
       if (file) {
         formData.append('file', file);
@@ -143,9 +146,13 @@ export default function WorkerCommerceView() {
 
   if (!session) return <div className="text-center text-gray-300">Cargando sesión...</div>
 
+  if (status === 'loading') return <div className="text-center text-gray-300">Cargando sesión...</div>
+
   if (!userRole) return <div className="text-center text-red-500">No se pudo determinar el rol del usuario.</div>
 
   if (isLoading) return <div className="text-center text-gray-300">Cargando trabajos...</div>
+
+  if (!jobs) return <div className="text-center text-red-500">No se pudieron cargar los trabajos.</div>
 
   return (
     <div className="space-y-6 pb-16">
