@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchJobs } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
@@ -36,9 +36,24 @@ export default function WorkerCommerceView() {
   const formRef = useRef(null)
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
 
-  const userRole = session?.user?.role || (session ? getUserRole(session.user.email) : null)
+  useEffect(() => {
+    console.log('Session status:', status)
+    console.log('Session data:', session)
+  }, [session, status])
+
+
+  const userRole = useMemo(() => {
+    if (status === 'authenticated' && session?.user?.email) {
+      return getUserRole(session.user.email)
+    }
+    return null
+  }, [session, status])
+
+  useEffect(() => {
+    console.log('User role:', userRole)
+  }, [userRole])
 
   const { data: jobs, isLoading, refetch } = useQuery({
     queryKey: ['jobs', activeTimeFrame, userRole],
@@ -140,6 +155,18 @@ export default function WorkerCommerceView() {
   }, [jobs]);
 
   const completedJobsCount = sortedJobs.length
+
+  if (status === 'loading') {
+    return <div className="text-center text-gray-300">Cargando sesión...</div>
+  }
+
+  if (status === 'unauthenticated') {
+    return <div className="text-center text-red-500">No autorizado. Por favor, inicie sesión.</div>
+  }
+
+  if (!userRole) {
+    return <div className="text-center text-red-500">No se pudo determinar el rol del usuario.</div>
+  }
 
   if (isLoading) return <div className="text-center text-gray-300">Cargando trabajos...</div>
 
