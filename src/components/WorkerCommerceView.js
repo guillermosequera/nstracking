@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchJobs } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
@@ -37,15 +37,21 @@ export default function WorkerCommerceView() {
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
   const { data: session, status } = useSession()
+  const [userRole, setUserRole] = useState(null)
 
-  const userRole = session?.user?.role || (session ? getUserRole(session.user.email) : null)
+  useEffect(() => {
+    if (session?.user?.email) {
+      const role = getUserRole(session.user.email)
+      setUserRole(role)
+    }
+  }, [session])
 
   const { data: jobs, isLoading, refetch } = useQuery({
     queryKey: ['jobs', activeTimeFrame, userRole],
     queryFn: () => fetchJobs(activeTimeFrame, userRole),
     retry: 3,
     onError: handleError,
-    enabled: !!userRole
+    enabled: !!userRole && status === 'authenticated'
   })
 
   const addJobMutation = useMutation({
@@ -144,15 +150,13 @@ export default function WorkerCommerceView() {
 
   const completedJobsCount = sortedJobs.length
 
-  if (!session) return <div className="text-center text-gray-300">Cargando sesión...</div>
-
   if (status === 'loading') return <div className="text-center text-gray-300">Cargando sesión...</div>
+
+  if (status === 'unauthenticated') return <div className="text-center text-red-500">No se ha iniciado sesión.</div>
 
   if (!userRole) return <div className="text-center text-red-500">No se pudo determinar el rol del usuario.</div>
 
   if (isLoading) return <div className="text-center text-gray-300">Cargando trabajos...</div>
-
-  if (!jobs) return <div className="text-center text-red-500">No se pudieron cargar los trabajos.</div>
 
   return (
     <div className="space-y-6 pb-16">
