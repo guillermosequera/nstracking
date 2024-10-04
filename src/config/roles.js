@@ -20,7 +20,7 @@ export const roles = {
                       'ejecutivo2@italoptic.cl',
                       'asistentecomercial@italoptic.cl',
                       'conveniostrento@opticatrento.cl',
-                      'contacto@opticatrento.cl',
+                      'contacto@opticatrento.cl'
                     ],
     workerQuality: ['quality@example.com'],
     workerLabs: ['superficie@italoptic.cl'],
