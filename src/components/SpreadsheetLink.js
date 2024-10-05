@@ -1,7 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 
-const SpreadsheetLink = ({ href }) => {
+const SpreadsheetLink = ({ href, label }) => {
   return (
     <div className="fixed bottom-4 left-4 z-10">
       <Link 

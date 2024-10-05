@@ -2,14 +2,14 @@ import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
 import { getAuthClient } from '@/utils/googleAuth';
 import { Readable } from 'stream';
-import { addJobWithFile } from '@/utils/fileJobUtils';
+import { addJobWithFile, addJobWithoutFile } from '@/utils/fileJobUtils';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { getUserRole } from "@/config/roles";
 import path from 'path';
 
 export async function POST(request) {
-  console.log('Iniciando solicitud POST para carga de archivo');
+  console.log('Iniciando solicitud POST para carga de archivo o creación de trabajo');
 
   try {
     const session = await getServerSession(authOptions);
@@ -29,62 +29,74 @@ export async function POST(request) {
     const lenswareNumber = formData.get('lenswareNumber');
     const activePage = 'commerce';
 
-    if (!file) {
-      console.log('No se recibió ningún archivo');
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+    if (!jobNumber || !deliveryDate) {
+      console.log('Falta información requerida: número de trabajo o fecha de entrega');
+      return NextResponse.json({ error: 'Missing required information' }, { status: 400 });
     }
 
-    console.log('Obteniendo cliente de autenticación');
-    const auth = await getAuthClient();
-    console.log('Cliente de autenticación obtenido');
+    let fileLink = null;
 
-    const drive = google.drive({ version: 'v3', auth });
+    if (file) {
+      console.log('Se recibió un archivo, procesando...');
+      const auth = await getAuthClient();
+      const drive = google.drive({ version: 'v3', auth });
 
-    // Obtener la extensión del archivo original
-    const originalExtension = path.extname(file.name);
+      const originalExtension = path.extname(file.name);
+      const newFileName = `${jobNumber}_${new Date().toISOString()}${originalExtension}`;
 
-    // Crear un nuevo nombre de archivo que incluya el número de trabajo
-    const newFileName = `${jobNumber}_${new Date().toISOString()}${originalExtension}`;
+      const fileMetadata = {
+        name: newFileName,
+        parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
+      };
 
-    const fileMetadata = {
-      name: newFileName,
-      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
-    };
+      const buffer = await file.arrayBuffer();
+      const stream = new Readable();
+      stream.push(Buffer.from(buffer));
+      stream.push(null);
 
-    const buffer = await file.arrayBuffer();
-    const stream = new Readable();
-    stream.push(Buffer.from(buffer));
-    stream.push(null);
+      const media = {
+        mimeType: file.type,
+        body: stream,
+      };
 
-    const media = {
-      mimeType: file.type,
-      body: stream,
-    };
+      console.log('Intentando crear archivo en Google Drive');
+      const driveResponse = await drive.files.create({
+        resource: fileMetadata,
+        media: media,
+        fields: 'id, webViewLink',
+      });
 
-    console.log('Intentando crear archivo en Google Drive');
-    const driveResponse = await drive.files.create({
-      resource: fileMetadata,
-      media: media,
-      fields: 'id, webViewLink',
-    });
+      console.log('Archivo creado en Google Drive:', driveResponse.data);
+      fileLink = driveResponse.data.webViewLink;
+    } else {
+      console.log('No se recibió ningún archivo, continuando sin subir archivo');
+    }
 
-    console.log('Archivo creado en Google Drive:', driveResponse.data);
-    const fileLink = driveResponse.data.webViewLink;
-
-    console.log(`Agregando trabajo ${jobNumber} con archivo para el usuario ${userEmail}`);
-    const newJob = await addJobWithFile(
-      { jobNumber, deliveryDate, lenswareNumber, fileLink },
-      userEmail,
-      userRole,
-      activePage
-    );
+    let newJob;
+    if (fileLink) {
+      console.log(`Agregando trabajo ${jobNumber} con archivo para el usuario ${userEmail}`);
+      newJob = await addJobWithFile(
+        { jobNumber, deliveryDate, lenswareNumber, fileLink },
+        userEmail,
+        userRole,
+        activePage
+      );
+    } else {
+      console.log(`Agregando trabajo ${jobNumber} sin archivo para el usuario ${userEmail}`);
+      newJob = await addJobWithoutFile(
+        { jobNumber, deliveryDate, lenswareNumber },
+        userEmail,
+        userRole,
+        activePage
+      );
+    }
 
     console.log('Trabajo agregado con éxito');
     return NextResponse.json({ fileLink, newJob });
   } catch (error) {
-    console.error('Error al cargar el archivo:', error);
+    console.error('Error al procesar la solicitud:', error);
     return NextResponse.json(
-      { error: 'Error uploading file', details: error.message },
+      { error: 'Error processing request', details: error.message },
       { status: 500 }
     );
   }

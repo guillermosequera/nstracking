@@ -25,6 +25,11 @@ export async function middleware(req) {
   // Redirect to appropriate page if user is at root
   if (path === '/') {
     if (adminRoles.includes(userRole)) {
+      if (userRole === 'adminRRHH') {
+        console.log('Redirecting adminRRHH to /admin/rrhh');
+        return NextResponse.redirect(new URL('/admin/rrhh', req.url));
+      }
+      console.log('Redirecting admin to /admin');
       return NextResponse.redirect(new URL('/admin', req.url));
     } else if (workerRoles.includes(userRole)) {
       let workerPath;
@@ -48,10 +53,24 @@ export async function middleware(req) {
   }
 
   // Protect admin routes
-  if (path.startsWith('/admin') && !adminRoles.includes(userRole)) {
-    return NextResponse.redirect(new URL('/status', req.url));
+  if (path.startsWith('/admin')) {
+    if (!adminRoles.includes(userRole)) {
+      console.log('Unauthorized access to admin route, redirecting to /status');
+      return NextResponse.redirect(new URL('/status', req.url));
+    }
+    if (userRole === 'adminRRHH') {
+      if (!path.startsWith('/admin/rrhh')) {
+        console.log('Redirecting adminRRHH to /admin/rrhh');
+        return NextResponse.redirect(new URL('/admin/rrhh', req.url));
+      }
+    } else {
+      // For other admin roles, prevent access to /admin/rrhh
+      if (path.startsWith('/admin/rrhh')) {
+        console.log('Unauthorized access to adminRRHH route, redirecting to /admin');
+        return NextResponse.redirect(new URL('/admin', req.url));
+      }
+    }
   }
-
   // Protect worker routes
   if (path.startsWith('/worker')) {
     const workerType = path.split('/')[2];

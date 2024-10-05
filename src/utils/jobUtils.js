@@ -174,3 +174,61 @@ export const getStatusFromPage = (activePage) => {
   };
   return statusMap[activePage] || 'Estado Desconocido';
 };
+
+
+export const addQualityJob = async (jobData, userEmail) => {
+  console.log(`Adding quality job for user: ${userEmail}`);
+  const timestamp = new Date().toISOString();
+  try {
+    const body = {
+      ...jobData,
+      timestamp,
+      userEmail,
+    };
+
+    console.log('Sending quality job data:', body);
+
+    const response = await fetch('/api/quality', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Server error response:', errorData);
+      throw new Error(errorData.error || `Failed to add quality job. Status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Added new quality job:', data.newJob);
+    return data.newJob;
+  } catch (error) {
+    console.error('Error adding quality job:', error);
+    throw error;
+  }
+};
+
+
+export const fetchQualityJobs = async (timeFrame, sheet) => {
+  console.log(`Fetching quality jobs for timeFrame: ${timeFrame} and sheet: ${sheet}`);
+  try {
+    const url = `/api/quality?sheet=${sheet}&timeFrame=${timeFrame}`;
+    console.log(`Sending request to: ${url}`);
+    const response = await fetch(url);
+    console.log(`Received response with status: ${response.status}`);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || `Failed to fetch quality jobs for ${timeFrame}`);
+    }
+    const data = await response.json();
+    console.log(`Fetched quality jobs for ${timeFrame}:`, data);
+    if (!Array.isArray(data)) {
+      throw new Error(`Invalid data format received for ${timeFrame}`);
+    }
+    return data;
+  } catch (error) {
+    console.error(`Error fetching quality jobs for ${timeFrame}:`, error);
+    throw error;
+  }
+};

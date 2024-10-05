@@ -115,9 +115,12 @@ export default function WorkerCommerceView() {
 
   const handleSubmit = useCallback((e) => {
     e.preventDefault()
-    if (jobNumber.length !== 8 && jobNumber.length !== 10) return
-    if (!file && !pastedImagePreview) {
-      handleError(new Error('Por favor, seleccione o pegue un archivo'));
+    if (jobNumber.length !== 8 && jobNumber.length !== 10) {
+      handleError(new Error('El número de trabajo debe tener 8 o 10 dígitos'));
+      return;
+    }
+    if (!deliveryDate) {
+      handleError(new Error('La fecha de entrega es obligatoria'));
       return;
     }
     
@@ -128,7 +131,7 @@ export default function WorkerCommerceView() {
     }
     
     addJobMutation.mutate(jobData)
-  }, [jobNumber, deliveryDate, lenswareNumber, file, pastedImagePreview, addJobMutation, handleError])
+  }, [jobNumber, deliveryDate, lenswareNumber, addJobMutation, handleError])
 
   const handleJobNumberChange = (e) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 10)
@@ -191,7 +194,7 @@ export default function WorkerCommerceView() {
           <Button 
             type="submit" 
             className="bg-blue-800 text-white px-4 py-2 rounded-r hover:bg-blue-700 transition duration-200 disabled:bg-gray-600"
-            disabled={addJobMutation.isLoading || (jobNumber.length !== 8 && jobNumber.length !== 10) || (!file && !pastedImagePreview)}
+            disabled={addJobMutation.isLoading || (jobNumber.length !== 8 && jobNumber.length !== 10) || !deliveryDate}
           >
             {addJobMutation.isLoading ? 'Agregando...' : 'Agregar'}
           </Button>
@@ -202,12 +205,13 @@ export default function WorkerCommerceView() {
             value={deliveryDate}
             onChange={(e) => setDeliveryDate(e.target.value)}
             className="bg-gray-800 border border-gray-700 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
+            required
           />
           <Input
             type="text"
             value={lenswareNumber}
             onChange={(e) => setLenswareNumber(e.target.value)}
-            placeholder="Número de Lensware"
+            placeholder="Número de Lensware (opcional)"
             className="bg-gray-800 border border-gray-700 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
           />
           <Input

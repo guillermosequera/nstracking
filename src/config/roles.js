@@ -20,12 +20,12 @@ export const roles = {
                       'ejecutivo2@italoptic.cl',
                       'asistentecomercial@italoptic.cl',
                       'conveniostrento@opticatrento.cl',
-                      'contacto@opticatrento.cl'
+                      'contacto@opticatrento.cl',
                     ],
-    workerQuality: ['quality@example.com'],
+    workerQuality: ['quality@example.com', 'italopticasistentemantencion@gmail.com'],
     workerLabs: ['superficie@italoptic.cl'],
     workerLabsAR: ['aritaloptic@gmail.com'],
-    workerLabsMineral: ['mineralesitaloptic@gmail.com', 'italopticasistentemantencion@gmail.com'],
+    workerLabsMineral: ['mineralesitaloptic@gmail.com'],
     workerMontage: ['italopticmontaje@gmail.com'],
     workerDispatch: ['asisdepachoitaloptic@gmail.com', 'asisdepachoitaloptic2@gmail.com', 'despacho@italoptic.cl'],
   };
@@ -46,6 +46,8 @@ export const roles = {
     workerMontage: process.env.NEXT_PUBLIC_SHEET_ID_MONTAGE_SHEET,
     workerDispatch: process.env.NEXT_PUBLIC_SHEET_ID_DISPATCH_SHEET,
     status: process.env.NEXT_PUBLIC_SHEET_ID_STATUS_SHEET,
+    merma: process.env.NEXT_PUBLIC_SHEET_ID_MERMA_SHEET,
+    garantia: process.env.NEXT_PUBLIC_SHEET_ID_WARRANTY_SHEET,
   };
   
   export function getUserRole(email) {
