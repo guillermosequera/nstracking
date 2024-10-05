@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchAllSheetData } from '@/utils/sheetUtils'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
 import { format } from 'date-fns'
@@ -13,6 +12,14 @@ import { isAdminRRHH } from '@/utils/adminRRHHAuth'
 const SHEETS = [
   'warehouse', 'commerce', 'quality', 'labs', 'montage', 'dispatch', 'status'
 ]
+
+const fetchAllSheetData = async () => {
+    const response = await fetch('/api/fetchAllSheetData');
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    }
+    return response.json();
+  };
 
 export default function AdminRRHHView() {
     const { data: session } = useSession()
