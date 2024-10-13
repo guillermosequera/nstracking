@@ -1,151 +1,154 @@
-'use client'
-
-import { useState, useEffect } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
-import { format } from 'date-fns'
-import DataTable from '@/components/DataTable'
-import { useSession } from 'next-auth/react'
-import { isAdminRRHH } from '@/utils/adminRRHHAuth'
+import JobTable from '@/components/JobTable'
+import SpreadsheetLink from '@/components/SpreadsheetLink'
+import AdminPageBase from '@/components/AdminPageBase'
+import { sheetIds } from '@/config/roles'
 
-const SHEETS = [
-  'warehouse', 'commerce', 'quality', 'labs', 'montage', 'dispatch', 'status'
-]
-
-const fetchAllSheetData = async () => {
-    const response = await fetch('/api/fetchAllSheetData');
+const fetchSheetData = async (sheet) => {
+  console.log(`Fetching data for sheet: ${sheet}`);
+  try {
+    const response = await fetch(`/api/fetchSheetData?sheet=${sheet}`);
     if (!response.ok) {
-      throw new Error('Network response was not ok');
+      throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
     }
-    return response.json();
-  };
+    const data = await response.json();
+    console.log(`Received data for ${sheet}:`, data);
+    return data;
+  } catch (error) {
+    console.error('Error fetching sheet data:', error);
+    throw error;
+  }
+}
 
 export default function AdminRRHHView() {
-    const { data: session } = useSession()
-    const [activeView, setActiveView] = useState(null)
-    const [activeSheet, setActiveSheet] = useState(null)
-    const [startDate, setStartDate] = useState('')
-    const [endDate, setEndDate] = useState('')
+  const [activeSheet, setActiveSheet] = useState(null)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
-  useEffect(() => {
-    if (!isAdminRRHH(session)) {
-      console.error('Unauthorized access to AdminRRHHView');
-      // You might want to redirect here or show an error message
-    }
-  }, [session]);
-
-  const { data: allSheetData, isLoading, error } = useQuery({
-    queryKey: ['allSheetData'],
-    queryFn: fetchAllSheetData,
-    enabled: activeView === 'viewData' && isAdminRRHH(session)
+  const { data: sheetData, isLoading, error } = useQuery({
+    queryKey: ['sheetData', activeSheet],
+    queryFn: () => activeSheet ? fetchSheetData(activeSheet) : null,
+    enabled: !!activeSheet,
+    retry: 3,
   })
 
-  const filteredData = activeSheet && allSheetData && allSheetData[activeSheet] ? 
-    allSheetData[activeSheet].filter(row => {
-      const rowDate = new Date(row[1]) // Asumiendo que la fecha está en la segunda columna
-      return (!startDate || rowDate >= new Date(startDate)) &&
-             (!endDate || rowDate <= new Date(endDate))
-    }) : []
+  const filteredData = useMemo(() => {
+    if (!sheetData) return []
+    let data = sheetData
+    if (startDate && endDate) {
+      data = data.filter(row => {
+        const rowDate = new Date(row['Fecha y Hora'])
+        return rowDate >= new Date(startDate) && rowDate <= new Date(endDate)
+      })
+    }
+    return data
+  }, [sheetData, startDate, endDate])
 
-  const handleViewChange = (view) => {
-    setActiveView(view)
-    setActiveSheet(null)
-  }
+  const columns = useMemo(() => {
+    if (!sheetData || sheetData.length === 0) return []
+    return Object.keys(sheetData[0])
+  }, [sheetData])
 
-  const handleSheetChange = (sheet) => {
-    setActiveSheet(sheet)
-  }
+  const dataCount = filteredData.length
 
-  if (!isAdminRRHH(session)) {
-    return <div>Acceso no autorizado</div>;
-  }
+  const userStats = useMemo(() => {
+    const stats = {}
+    filteredData.forEach(row => {
+      const user = row['Usuario']
+      if (user) {
+        stats[user] = (stats[user] || 0) + 1
+      }
+    })
+    return stats
+  }, [filteredData])
 
-  return (
-    <div className="space-y-6 p-8">
-      <div className="flex justify-center space-x-4">
-        <Button 
-          onClick={() => handleViewChange('viewData')}
-          variant={activeView === 'viewData' ? "default" : "outline"}
+  const renderSheetButtons = useCallback(() => (
+    <div className="flex flex-wrap justify-center space-x-2 space-y-2 mb-6">
+      {Object.keys(sheetIds).map(sheet => (
+        <Button
+          key={sheet}
+          onClick={() => setActiveSheet(sheet)}
+          variant={activeSheet === sheet ? "default" : "outline"}
+          className={`transition-all duration-200 ${activeSheet === sheet ? "bg-blue-800 text-white" : "bg-gray-700 text-gray-400"}`}
         >
-          Ver datos
+          {sheet}
         </Button>
-        <Button 
-          onClick={() => handleViewChange('serviceLevel')}
-          variant={activeView === 'serviceLevel' ? "default" : "outline"}
-        >
-          Nivel de servicio
-        </Button>
-        <Button 
-          onClick={() => handleViewChange('scraps')}
-          variant={activeView === 'scraps' ? "default" : "outline"}
-        >
-          Porcentaje de Mermas
-        </Button>
-        <Button 
-          onClick={() => handleViewChange('delayedDays')}
-          variant={activeView === 'delayedDays' ? "default" : "outline"}
-        >
-          Días atrasados
-        </Button>
-      </div>
+      ))}
+    </div>
+  ), [activeSheet])
 
-      {activeView === 'viewData' && (
-        <div className="space-y-4">
-          <div className="flex justify-center space-x-2">
-            {SHEETS.map(sheet => (
-              <Button 
-                key={sheet}
-                onClick={() => handleSheetChange(sheet)}
-                variant={activeSheet === sheet ? "default" : "outline"}
-              >
-                {sheet.charAt(0).toUpperCase() + sheet.slice(1)}
-              </Button>
-            ))}
-          </div>
+  const renderDateFilter = useCallback(() => (
+    <div className="flex justify-center space-x-4 mb-6">
+      <Input
+        type="date"
+        value={startDate}
+        onChange={(e) => setStartDate(e.target.value)}
+        className="bg-gray-800 text-white"
+      />
+      <Input
+        type="date"
+        value={endDate}
+        onChange={(e) => setEndDate(e.target.value)}
+        className="bg-gray-800 text-white"
+      />
+    </div>
+  ), [startDate, endDate])
 
-          {activeSheet && (
-            <div className="space-y-4">
-              <div className="flex justify-center space-x-4">
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  placeholder="Fecha de inicio"
-                />
-                <Input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  placeholder="Fecha de fin"
-                />
-              </div>
+  const renderStats = useCallback(() => (
+    <div className="mb-6">
+      <h3 className="text-xl font-semibold mb-2">Estadísticas:</h3>
+      <p>Total de registros: {dataCount}</p>
+      <h4 className="text-lg font-semibold mt-2 mb-1">Registros por usuario:</h4>
+      <ul>
+        {Object.entries(userStats).map(([user, count]) => (
+          <li key={user}>{user}: {count}</li>
+        ))}
+      </ul>
+    </div>
+  ), [dataCount, userStats])
 
-              <div className="text-center">
-                <p>Total de trabajos: {filteredData.length}</p>
-                {startDate && endDate && (
-                  <p>
-                    Mostrando datos desde {format(new Date(startDate), 'dd/MM/yyyy')} 
-                    hasta {format(new Date(endDate), 'dd/MM/yyyy')}
-                  </p>
-                )}
-              </div>
-
-              {isLoading ? (
-                <p className="text-center">Cargando datos...</p>
-              ) : error ? (
-                <p className="text-center text-red-500">Error al cargar los datos: {error.message}</p>
-              ) : (
-                <DataTable data={filteredData} />
-              )}
+  const content = (
+    <div className="space-y-6 pb-16">
+      {renderSheetButtons()}
+      {activeSheet && (
+        <>
+          {renderDateFilter()}
+          {renderStats()}
+          {isLoading ? (
+            <div className="text-center text-gray-300">Cargando datos...</div>
+          ) : (
+            <div className="overflow-x-auto bg-gray-900 rounded-lg shadow">
+              <JobTable 
+                title={`Datos de ${activeSheet}`} 
+                jobs={filteredData} 
+                columns={columns}
+              />
             </div>
           )}
-        </div>
+          {sheetIds[activeSheet] && (
+            <SpreadsheetLink 
+              href={`https://docs.google.com/spreadsheets/d/${sheetIds[activeSheet]}/edit#gid=0`}
+            />
+          )}
+        </>
       )}
 
-      {activeView === 'serviceLevel' && <p className="text-center">Funcionalidad de Nivel de Servicio aún no implementada</p>}
-      {activeView === 'scraps' && <p className="text-center">Funcionalidad de Porcentaje de Mermas aún no implementada</p>}
-      {activeView === 'delayedDays' && <p className="text-center">Funcionalidad de Días Atrasados aún no implementada</p>}
+      {error && (
+        <Alert variant="destructive" className="bg-red-900 border-red-700 text-red-100">
+          <AlertDescription>{error.toString()}</AlertDescription>
+        </Alert>
+      )}
     </div>
+  )
+
+  return (
+    <AdminPageBase title="Panel de Administración RRHH" role="adminRRHH">
+      {content}
+    </AdminPageBase>
   )
 }

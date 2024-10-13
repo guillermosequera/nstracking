@@ -1,38 +1,34 @@
-import { google } from 'googleapis';
-import { getAuthClient } from '@/utils/googleAuth';
-import { sheetIds } from '@/config/roles';
+// src/app/api/fetchAllSheetData/route.js
 
-export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    try {
-      const auth = await getAuthClient();
-      const sheets = google.sheets({ version: 'v4', auth });
+// import { NextResponse } from 'next/server';
+// import { google } from 'googleapis';
+// import { getAuthClient } from '@/utils/googleAuth';
+// import { sheetIds } from '@/config/roles';
 
-      const allData = {};
+// export async function GET(request) {
+//   const { searchParams } = new URL(request.url);
+//   const sheet = searchParams.get('sheet');
 
-      for (const [role, sheetId] of Object.entries(sheetIds)) {
-        if (sheetId) {
-          try {
-            const response = await sheets.spreadsheets.values.get({
-              spreadsheetId: sheetId,
-              range: 'A:Z',
-            });
+//   if (!sheet || !sheetIds[sheet]) {
+//     return NextResponse.json({ error: 'Invalid or missing sheet parameter' }, { status: 400 });
+//   }
 
-            allData[role] = response.data.values || [];
-          } catch (error) {
-            console.error(`Error fetching data for ${role}:`, error);
-            allData[role] = [];
-          }
-        }
-      }
+//   try {
+//     const auth = await getAuthClient();
+//     const sheets = google.sheets({ version: 'v4', auth });
 
-      res.status(200).json(allData);
-    } catch (error) {
-      console.error('Error in fetchAllSheetData:', error);
-      res.status(500).json({ error: 'Internal Server Error' });
-    }
-  } else {
-    res.setHeader('Allow', ['GET']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
-  }
-}
+//     const sheetId = sheetIds[sheet];
+
+//     const response = await sheets.spreadsheets.values.get({
+//       spreadsheetId: sheetId,
+//       range: 'A:Z',
+//     });
+
+//     const data = response.data.values || [];
+
+//     return NextResponse.json({ [sheet]: data });
+//   } catch (error) {
+//     console.error('Error in fetchSheetData:', error);
+//     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+//   }
+// }

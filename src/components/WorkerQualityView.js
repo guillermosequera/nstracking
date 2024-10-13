@@ -125,9 +125,8 @@ const sheetOptions = [
 
   const resetForm = () => {
     setJobNumber('')
-    setControlType('')
-    setResult('')
     setNotes('')
+    // No reseteamos controlType ni result
   }
 
   const handleSubmit = useCallback((e) => {

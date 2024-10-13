@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { sheetIds } from '@/config/roles';
 import { getGCPCredentials, getAuthClient } from '@/utils/googleAuth';
 
+const TIMEOUT = 3000;
+
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);

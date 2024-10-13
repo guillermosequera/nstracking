@@ -5,7 +5,7 @@ export const roles = {
     adminProduction: ['adminProduction@example.com'],
     adminFinance: ['adminFinance@example.com'],
     adminCommerce: ['adminCommerce@example.com'],
-    adminRRHH: ['adminRRHH@example.com', 'italopticasistentemantencion@gmail.com'],
+    adminRRHH: ['adminRRHH@example.com'],
     adminAdmin: ['adminAdmin@example.com'],
     workerWareHouse: [
                       'bodegacentral@italoptic.cl',
@@ -22,7 +22,7 @@ export const roles = {
                       'conveniostrento@opticatrento.cl',
                       'contacto@opticatrento.cl',
                     ],
-    workerQuality: ['control.calidad@italoptic.cl'],
+    workerQuality: ['control.calidad@italoptic.cl', 'italopticasistentemantencion@gmail.com'],
     workerLabs: ['superficie@italoptic.cl'],
     workerLabsAR: ['aritaloptic@gmail.com'],
     workerLabsMineral: ['mineralesitaloptic@gmail.com'],
