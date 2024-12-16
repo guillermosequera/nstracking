@@ -1,242 +1,190 @@
 import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
 import { sheetIds } from '@/config/roles';
+import { getAuthClient } from '@/utils/googleAuth';
 import { getStatusFromPage } from '@/utils/jobUtils';
-import { getCachedData, setCachedData } from '@/utils/cacheUtils';
-
-const getGCPCredentials = () => {
-  console.log('Obteniendo credenciales GCP');
-  if (!process.env.GCP_PRIVATE_KEY || !process.env.GCP_SERVICE_ACCOUNT_EMAIL || !process.env.GCP_PROJECT_ID) {
-    console.error('Faltan variables de entorno para las credenciales GCP');
-    return null;
-  }
-  return {
-    credentials: {
-      client_email: process.env.GCP_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GCP_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    },
-    projectId: process.env.GCP_PROJECT_ID,
-  };
-};
-
-const getAuthClient = () => {
-  const credentials = getGCPCredentials();
-  if (!credentials) {
-    throw new Error('No se pudieron obtener las credenciales GCP');
-  }
-  return new google.auth.GoogleAuth({
-    ...credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-};
 
 export async function GET(request) {
-  console.log('Iniciando solicitud GET');
-  const { searchParams } = new URL(request.url);
-  const role = searchParams.get('role');
-  const timeFrame = searchParams.get('timeFrame');
-  const jobNumber = searchParams.get('jobNumber');
-  const sheetId = sheetIds[role];
-  
-  console.log(`Rol recibido: ${role}`); // Agregamos este log
-  
-
-  // Mapeo de roles de worker a sus correspondientes sheet IDs
-  const workerRoleMap = {
-    workerWarehouse: 'workerWareHouse',
-    workerCommerce: 'workerCommerce',
-    workerQuality: 'workerQuality',
-    workerLabs: 'workerLabs',
-    workerMontage: 'workerMontage',
-    workerDispatch: 'workerDispatch'
-  };
-
-
-  console.log(`Parámetros de la solicitud: role=${role}, timeFrame=${timeFrame}, jobNumber=${jobNumber}, sheetId=${sheetId}`);
-
-  if (!role) {
-    console.error('Rol no especificado');
-    return NextResponse.json({ error: 'Role is required' }, { status: 400 });
-  }
-
-  if (!sheetId) {
-    console.log(`SheetId obtenido para el rol ${role}: ${sheetId}`);
-    return NextResponse.json({ error: `Invalid role ${role}` }, { status: 400 });
-  }
-
   try {
+    const { searchParams } = new URL(request.url);
+    const role = searchParams.get('role');
+    
+    console.log('Iniciando solicitud GET');
+    console.log('Rol recibido:', role);
+
+    if (!role) {
+      console.log('Rol no especificado');
+      return NextResponse.json({ error: 'Role parameter is required' }, { status: 400 });
+    }
+
+    const sheetId = sheetIds[role];
+    if (!sheetId) {
+      console.error(`Sheet ID no encontrado para rol: ${role}`);
+      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+    }
+
+    console.log('Intentando leer datos de la hoja:', sheetId);
+
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    if (role === 'status' && jobNumber) {
-      return await getJobStatus(sheets, sheetId, jobNumber);
-    }
-
-    console.log(`Intentando leer datos de la hoja: ${sheetId}`);
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
-      range: 'A:J',
+      range: 'A:Z',
     });
 
-    console.log('Respuesta recibida de Google Sheets');
-    console.log('Metadata de la respuesta:', JSON.stringify(response.data, null, 2));
+    const rows = response.data.values || [];
+    console.log(`Total de filas recuperadas: ${rows.length}`);
 
-    const allValues = response.data.values || [];
-    console.log(`Total de filas recuperadas: ${allValues.length}`);
+    return NextResponse.json(rows);
 
-    if (allValues.length === 0) {
-      console.warn('No se encontraron datos en la hoja de cálculo');
-      return NextResponse.json([]);
-    }
-
-    console.log('Filtrando datos por timeFrame');
-    const filteredValues = filterDataByTimeFrame(allValues, timeFrame);
-    console.log(`Total de filas después del filtrado: ${filteredValues.length}`);
-
-    return NextResponse.json(filteredValues);
   } catch (error) {
-    console.error('Error en GET /api/sheets:', error);
-    console.error('Stack trace:', error.stack);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('Error al obtener datos de la hoja:', error);
+    return NextResponse.json(
+      { error: error.message || 'Error interno del servidor' },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request) {
   console.log('Iniciando solicitud POST');
-  const body = await request.json();
-  const { jobNumber, timestamp, userEmail, role, activePage, status } = body;
-  const sheetId = sheetIds[role];
-  const statusSheetId = sheetIds['status'];
-
-  if (!sheetId) {
-    console.error(`Sheet ID no encontrado para el rol: ${role}`);
-    return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
-  }
-
   try {
+    const body = await request.json();
+    const { jobNumber, timestamp, userEmail, role, activePage, status } = body;
+    
+    const sheetId = sheetIds[role];
+    const statusSheetId = sheetIds.status;
+
+    if (!sheetId) {
+      console.error(`Sheet ID no encontrado para el rol: ${role}`);
+      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+    }
+
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    const values = [[jobNumber, timestamp, userEmail]];
-    const correctStatus = getStatusFromPage(activePage);
-    const statusValues = [[jobNumber, timestamp, activePage, correctStatus, userEmail]];
+    const values = [[
+      jobNumber, 
+      timestamp, 
+      status || getStatusFromPage(activePage),
+      userEmail
+    ]];
+    
+    const statusValues = [[
+      jobNumber, 
+      timestamp,
+      activePage,
+      status || getStatusFromPage(activePage),
+      userEmail,
+      ''
+    ]];
 
     // Agregar a la hoja del área
-    console.log('Intentando añadir datos a la hoja del área:', values);
-    const areaResponse = await sheets.spreadsheets.values.append({
+    console.log('Agregando a hoja del área:', values);
+    await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
-      range: 'A:C',
+      range: 'A:D', // Actualizado para incluir la columna D
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values },
+      requestBody: { values }
     });
 
-    // Agregar a la hoja de estado
-    console.log('Intentando añadir datos a la hoja de estado:', statusValues);
-    const statusResponse = await sheets.spreadsheets.values.append({
+    // Agregar a la hoja de status
+    console.log('Agregando a hoja de status:', statusValues);
+    await sheets.spreadsheets.values.append({
       spreadsheetId: statusSheetId,
-      range: 'A:E',
+      range: 'A:F',
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values: statusValues },
+      requestBody: { values: statusValues }
     });
 
-    console.log('Respuesta de append (área):', JSON.stringify(areaResponse.data, null, 2));
-    console.log('Respuesta de append (estado):', JSON.stringify(statusResponse.data, null, 2));
+    return NextResponse.json({
+      success: true,
+      newJob: {
+        jobNumber,
+        timestamp,
+        status: status || getStatusFromPage(activePage),
+        userEmail
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en POST:', error);
+    return NextResponse.json(
+      { error: error.message || 'Error interno del servidor' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request) {
+  try {
+    const body = await request.json();
+    const { jobNumber, userRole } = body;
+    
+    console.log('Procesando solicitud de eliminación:', { jobNumber, userRole });
+
+    if (!jobNumber || !userRole) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Faltan campos requeridos' 
+      }, { status: 400 });
+    }
+
+    const sheetId = sheetIds[userRole];
+    if (!sheetId) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Rol de usuario inválido' 
+      }, { status: 400 });
+    }
+
+    const auth = await getAuthClient();
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    // Buscar el trabajo primero
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: 'A:A',
+    });
+
+    const rows = response.data.values || [];
+    const rowIndex = rows.findIndex(row => row[0] === jobNumber.toString());
+
+    if (rowIndex === -1) {
+      return NextResponse.json({ 
+        success: false,
+        error: 'Trabajo no encontrado' 
+      }, { status: 404 });
+    }
+
+    // Eliminar la fila
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: sheetId,
+      resource: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: 0,
+              dimension: 'ROWS',
+              startIndex: rowIndex,
+              endIndex: rowIndex + 1,
+            },
+          },
+        }],
+      },
+    });
 
     return NextResponse.json({ 
-      newJob: { jobNumber, timestamp, userEmail, status: correctStatus },
-      message: 'Job added successfully to both sheets'
+      success: true,
+      message: 'Trabajo eliminado exitosamente'
     });
+
   } catch (error) {
-    console.error('Error en POST /api/sheets:', error);
-    console.error('Stack trace:', error.stack);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Error en DELETE /api/sheets:', error);
+    return NextResponse.json({ 
+      success: false,
+      error: error.message || 'Error interno del servidor'
+    }, { status: 500 });
   }
-}
-
-async function getJobStatus(sheets, sheetId, jobNumber) {
-  console.log(`Buscando estado del trabajo: ${jobNumber}`);
-  
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: 'A:E',
-  });
-
-  const allValues = response.data.values || [];
-  const jobHistory = allValues.filter(row => row[0] === jobNumber);
-
-  if (jobHistory.length === 0) {
-    return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-  }
-
-  return NextResponse.json(jobHistory);
-}
-
-function buildQuery(timeFrame) {
-  console.log(`Construyendo query para timeFrame: ${timeFrame}`);
-  const now = new Date();
-  let startDate, endDate;
-
-  switch (timeFrame) {
-    case 'today':
-      startDate = new Date(now.setHours(0, 0, 0, 0));
-      endDate = new Date(now.setHours(23, 59, 59, 999));
-      break;
-    case 'yesterday':
-      startDate = new Date(now.setDate(now.getDate() - 1));
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(startDate);
-      endDate.setHours(23, 59, 59, 999);
-      break;
-    case 'twoDaysAgo':
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - 2);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(now);
-      endDate.setDate(now.getDate() - 1);
-      endDate.setHours(23, 59, 59, 999);
-      break;
-    case 'week':
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - 7);
-      startDate.setHours(0, 0, 0, 0);
-      endDate = new Date(now);
-      endDate.setHours(23, 59, 59, 999);
-      break;
-    case 'month':
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      endDate.setHours(23, 59, 59, 999);
-      break;
-    case 'lastMonth':
-      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      endDate = new Date(now.getFullYear(), now.getMonth(), 0);
-      endDate.setHours(23, 59, 59, 999);
-      break;
-    default:
-      console.log('TimeFrame no válido, retornando null');
-      return { startDate: null, endDate: null };
-  }
-
-  console.log(`Query construida: startDate=${startDate.toISOString()}, endDate=${endDate.toISOString()}`);
-  return { startDate, endDate };
-}
-
-function filterDataByTimeFrame(data, timeFrame) {
-  console.log(`Filtrando datos para timeFrame: ${timeFrame}`);
-  const { startDate, endDate } = buildQuery(timeFrame);
-  
-  if (!startDate || !endDate) {
-    console.log('No hay fechas válidas para filtrar, retornando todos los datos');
-    return data;
-  }
-
-  console.log(`Filtrando datos entre ${startDate.toISOString()} y ${endDate.toISOString()}`);
-  const filteredData = data.filter((row, index) => {
-    if (index === 0) return false; // Skip header row
-    const rowDate = new Date(row[1]);
-    return rowDate >= startDate && rowDate <= endDate;
-  });
-
-  console.log(`Datos filtrados: ${filteredData.length} filas`);
-  return filteredData;
 }

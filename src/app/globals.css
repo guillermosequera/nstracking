@@ -20,3 +20,21 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-custom::-webkit-scrollbar {
+  height: 8px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-track {
+  background: #2d3748; /* Color de fondo de la pista */
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb {
+  background-color: #4a5568; /* Color del pulgar */
+  border-radius: 10px;
+  border: 2px solid #2d3748; /* Espacio alrededor del pulgar */
+}

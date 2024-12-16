@@ -1,86 +1,122 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchJobs, addJob } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/Button'
 import { useSession } from 'next-auth/react'
+import JobNumberInput from './JobNumberInput'
 import SpreadsheetLink from './SpreadsheetLink'
-import { getUserRole } from '@/config/roles'
 import JobTable from './JobTable'
 import TimeFrameSelector from './TimeFrameSelector'
+import { useTimeFrameFilter } from './TimeFrameSelector'
+import { sheetIds } from '@/config/roles'
 
-const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1np0Qyih80po_73ukGPj_3JpoHZN1HPuF52ea7Ag-M1M/edit?gid=0#gid=0'
-const COLUMNS = ['Número de Trabajo', 'Fecha y Hora', 'Usuario']
-const ACTIVE_PAGE = 'labsMineral'
+const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerLabsMineral}/edit?gid=0#gid=0`
+const COLUMNS = [
+  { key: 'jobNumber', header: 'N° Orden' },
+  { key: 'timestamp', header: 'Fecha y Hora' },
+  { key: 'status', header: 'Estado' },
+  { key: 'user', header: 'Usuario' }
+]
+
+const statusFilterOptions = [
+  { value: 'all', label: 'Todos' },
+  { value: 'mineral', label: 'Superficie Mineral' },
+  { value: 'reparacion', label: 'Reparación' },
+  { value: 'rectificacion', label: 'Rectificación' },
+  { value: 'Merma', label: 'Mermas' }
+]
 
 export default function WorkerLabsMineralView() {
   const [jobNumber, setJobNumber] = useState('')
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('all')
+  
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
   const { data: session } = useSession()
 
-  const userRole = session?.user?.role || (session ? getUserRole(session.user.email) : null)
-
-  const { data: jobs, isLoading, refetch } = useQuery({
-    queryKey: ['jobs', activeTimeFrame, userRole],
-    queryFn: () => fetchJobs(activeTimeFrame, userRole),
+  const { data: allJobs = [], isLoading } = useQuery({
+    queryKey: ['mineral-jobs', activeTimeFrame],
+    queryFn: () => fetchJobs(activeTimeFrame, 'workerLabsMineral'),
     retry: 3,
     onError: handleError,
-    enabled: !!userRole
+    enabled: !!session?.user?.email,
+    refetchInterval: 30000
   })
 
+  const filteredJobs = useTimeFrameFilter(allJobs || [], activeTimeFrame)
+    .filter((job, index) => {
+      if (!job || index === 0) return false;
+      
+      // Extraemos área y opción del estado
+      const [area, option] = (job[2] || '').split(' - ');
+      
+      switch(selectedStatusFilter) {
+        case 'all':
+          return true;
+        case 'mineral':
+          return area === 'Laboratorio' && option === 'Superficie mineral';
+        case 'reparacion':
+          return area === 'Laboratorio' && option === 'Reparacion';
+        case 'rectificacion':
+          return area === 'Laboratorio' && option === 'Rectificacion';
+        case 'Merma':
+          return area === 'Merma' && (
+            option === 'Merma laboratorio'
+          );
+        default:
+          return true;
+      }
+    })
+    .map((job) => ({
+      jobNumber: job[0],
+      timestamp: new Date(job[1]).toLocaleString('es-ES', {
+        dateStyle: 'medium',
+        timeStyle: 'medium'
+      }),
+      status: job[2],
+      user: job[3]
+    }))
+
   const addJobMutation = useMutation({
-    mutationFn: (jobNumber) => addJob(jobNumber, session?.user?.email, userRole, ACTIVE_PAGE),
-    onSuccess: (newJob) => {
-      refetch()
+    mutationFn: (jobData) => addJob(
+      jobData.jobNumber,
+      session?.user?.email,
+      'workerLabsMineral',
+      'labsMineral',
+      jobData.status
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['mineral-jobs'])
       setJobNumber('')
       clearError()
     },
     onError: handleError
   })
 
-  const handleSubmit = useCallback((e) => {
-    e.preventDefault()
-    if (jobNumber.length !== 8 && jobNumber.length !== 10) return
-    addJobMutation.mutate(jobNumber)
-  }, [jobNumber, addJobMutation])
-
-  const handleInputChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 10)
-    setJobNumber(value)
-  }
-
-  const sortedJobs = useMemo(() => {
-    return jobs ? [...jobs].sort((a, b) => new Date(b[1]) - new Date(a[1])) : []
-  }, [jobs])
-
-  const completedJobsCount = sortedJobs.length
+  const handleSubmit = useCallback((jobNumberValue, status) => {
+    const formattedStatus = `${status.area} - ${status.option}`;
+    
+    addJobMutation.mutate({ 
+      jobNumber: jobNumberValue,
+      status: formattedStatus
+    })
+  }, [addJobMutation])
 
   if (isLoading) return <div className="text-center text-gray-300">Cargando trabajos...</div>
 
   return (
     <div className="space-y-6 pb-16">
-      <form onSubmit={handleSubmit} className="flex justify-center">
-        <div className="flex items-center w-full max-w-md">
-          <input
-            type="text"
-            value={jobNumber}
-            onChange={handleInputChange}
-            placeholder="Número de trabajo (8 o 10 dígitos)"
-            className="flex-grow bg-gray-800 border border-gray-700 rounded-l p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
-            aria-label="Ingrese número de trabajo"
-          />
-          <button 
-            type="submit" 
-            className="bg-blue-800 text-white px-4 py-2 rounded-r hover:bg-blue-800 transition duration-200 disabled:bg-gray-600"
-            disabled={addJobMutation.isLoading || (jobNumber.length !== 8 && jobNumber.length !== 10)}
-          >
-            {addJobMutation.isLoading ? 'Agregando...' : 'Agregar'}
-          </button>
-        </div>
-      </form>
+      <div className="space-y-4 bg-gray-900 p-4 rounded-lg">
+        <JobNumberInput 
+          jobNumber={jobNumber}
+          setJobNumber={setJobNumber}
+          isLoading={addJobMutation.isLoading}
+          onSubmit={handleSubmit}
+        />
+      </div>
 
       {error && (
         <Alert variant="destructive" className="bg-red-900 border-red-700 text-red-100">
@@ -88,18 +124,33 @@ export default function WorkerLabsMineralView() {
         </Alert>
       )}
 
-      <div className="flex justify-between items-center">
-        <Badge variant="secondary" className="text-lg bg-gray-800 text-gray-100">
-          Trabajos completados: {completedJobsCount}
-        </Badge>
+      <div className="flex justify-center space-x-4">
+        {statusFilterOptions.map(({ value, label }) => (
+          <Button
+            key={value}
+            onClick={() => setSelectedStatusFilter(value)}
+            variant={selectedStatusFilter === value ? "default" : "outline"}
+            className={selectedStatusFilter === value ? "bg-blue-800" : "bg-gray-700"}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
 
-      <TimeFrameSelector activeTimeFrame={activeTimeFrame} setActiveTimeFrame={setActiveTimeFrame} />
+      <TimeFrameSelector 
+        activeTimeFrame={activeTimeFrame} 
+        setActiveTimeFrame={setActiveTimeFrame}
+        data={allJobs}
+      />
 
       <JobTable 
-        title={`Trabajos de ${activeTimeFrame}`} 
-        jobs={sortedJobs}
+        title="Trabajos de Laboratorio Mineral"
+        jobs={filteredJobs}
         columns={COLUMNS}
+        timeFrame={activeTimeFrame}
+        enableScroll={true}
+        role="workerLabsMineral"
+        onError={handleError}
       />
 
       <SpreadsheetLink href={SPREADSHEET_URL} />

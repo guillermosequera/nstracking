@@ -1,103 +1,130 @@
-import { useState, useCallback, useMemo } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchJobs, addJobAR } from '@/utils/jobUtils'
+'use client'
+
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchJobs } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/Button'
 import { useSession } from 'next-auth/react'
+import { useTimeFrameData } from './TimeFrameSelector'
 import SpreadsheetLink from './SpreadsheetLink'
-import { getUserRole } from '@/config/roles'
 import JobTable from './JobTable'
 import TimeFrameSelector from './TimeFrameSelector'
-import { Button } from '@/components/ui/Button'
+import { sheetIds } from '@/config/roles'
+import JobNumberInput from './JobNumberInput'
+import { useTheme } from 'next-themes'
+import { jobQueue } from '@/utils/jobQueue'
 
-const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1FCZrQdI62cLWKNo-TZanh-56DBxIFriNEO-yOjCHTMI/edit?gid=0#gid=0'
-const COLUMNS = ['Número de Trabajo', 'Fecha y Hora', 'Tipo de Cristal', 'Usuario']
-const ACTIVE_PAGE = 'labsAR'
+const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerLabsAR}/edit?gid=0#gid=0`
+const COLUMNS = [
+  { key: 'jobNumber', header: 'N° Orden' },
+  { key: 'timestamp', header: 'Fecha y Hora' },
+  { key: 'status', header: 'Estado' },
+  { key: 'user', header: 'Usuario' }
+]
+
+const statusFilterOptions = [
+  { value: 'all', label: 'Todos' },
+  { value: 'AR', label: 'Antireflejo' },
+  { value: 'Merma', label: 'Mermas' }
+]
 
 export default function WorkerLabsARView() {
+  const { theme } = useTheme();
   const [jobNumber, setJobNumber] = useState('')
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
-  const [crystalType, setCrystalType] = useState('LACA')
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('all')
+  const [queueStatus, setQueueStatus] = useState({ pending: 0, failed: 0 });
+  
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
   const { data: session } = useSession()
 
-  const userRole = session?.user?.role || (session ? getUserRole(session.user.email) : null)
-
-  const { data: jobs, isLoading, refetch } = useQuery({
-    queryKey: ['jobs', activeTimeFrame, userRole],
-    queryFn: () => fetchJobs(activeTimeFrame, userRole),
+  const { data: allJobs = [], isLoading, refetch } = useQuery({
+    queryKey: ['labsAR-jobs', activeTimeFrame],
+    queryFn: () => fetchJobs(activeTimeFrame, 'workerLabsAR'),
     retry: 3,
     onError: handleError,
-    enabled: !!userRole
+    enabled: !!session?.user?.email
   })
 
-  const addJobMutation = useMutation({
-    mutationFn: (jobData) => addJobAR(jobData, session?.user?.email, userRole, ACTIVE_PAGE),
-    onSuccess: (newJob) => {
-      refetch()
-      setJobNumber('')
-      clearError()
-    },
-    onError: handleError
-  })
+  const timeFilteredJobs = useTimeFrameData(allJobs, activeTimeFrame);
 
-  const handleSubmit = useCallback((e) => {
-    e.preventDefault()
-    if (jobNumber.length !== 8 && jobNumber.length !== 10) return
-    addJobMutation.mutate({ jobNumber, crystalType })
-  }, [jobNumber, crystalType, addJobMutation])
+  const filteredJobs = useMemo(() => {
+    return timeFilteredJobs
+      .filter(job => {
+        if (!job) return false;
+        const [area] = (job[2] || '').split(' - ');
+        return selectedStatusFilter === 'all' || area === selectedStatusFilter;
+      })
+      .map(job => ({
+        jobNumber: job[0],
+        timestamp: job[1],
+        timestampFormatted: new Date(job[1]).toLocaleString('es-ES', {
+          dateStyle: 'medium',
+          timeStyle: 'medium'
+        }),
+        status: job[2],
+        user: job[3]
+      }));
+  }, [timeFilteredJobs, selectedStatusFilter]);
 
-  const handleInputChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 10)
-    setJobNumber(value)
-  }
+  const handleSubmit = useCallback((jobNumberValue, status) => {
+    if (!status) return;
+    
+    const formattedStatus = `${status.area} - ${status.option}`;
+    const now = new Date();
+    const timestamp = now.toISOString();
+    
+    jobQueue.add({
+      jobNumber: jobNumberValue,
+      userEmail: session?.user?.email,
+      role: 'workerLabsAR',
+      activePage: 'labsAR',
+      status: formattedStatus,
+      timestamp
+    });
 
-  const sortedJobs = useMemo(() => {
-    return jobs ? [...jobs].sort((a, b) => new Date(b[1]) - new Date(a[1])) : []
-  }, [jobs])
+    queryClient.setQueryData(['labsAR-jobs'], (old) => {
+      const newRow = [jobNumberValue, timestamp, formattedStatus, session?.user?.email];
+      
+      if (!old || !Array.isArray(old) || old.length === 0) {
+        return [['jobNumber', 'timestamp', 'status', 'user'], newRow];
+      }
+      
+      const [headers, ...rows] = old;
+      return [headers, newRow, ...rows];
+    });
+    
+    refetch();
+    setJobNumber('');
+    clearError();
+  }, [session?.user?.email, queryClient, refetch, clearError]);
 
-  const completedJobsCount = sortedJobs.length
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const status = jobQueue.getStatus();
+      setQueueStatus(status);
+      
+      if (status.pending === 0) {
+        refetch();
+      }
+    }, 1000);
 
-  if (isLoading) return <div className="text-center text-gray-300">Cargando trabajos...</div>
+    return () => clearInterval(interval);
+  }, [refetch]);
 
   return (
     <div className="space-y-6 pb-16">
-      <div className="flex justify-center space-x-4 mb-4">
-        <Button
-          onClick={() => setCrystalType('LACA')}
-          className={`${crystalType === 'LACA' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'} px-4 py-2 rounded transition-all duration-200 transform ${crystalType === 'LACA' ? 'scale-105' : 'scale-100'}`}
-        >
-          LACA
-        </Button>
-        <Button
-          onClick={() => setCrystalType('AR')}
-          className={`${crystalType === 'AR' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'} px-4 py-2 rounded transition-all duration-200 transform ${crystalType === 'AR' ? 'scale-105' : 'scale-100'}`}
-        >
-          AR
-        </Button>
+      <div className="space-y-4 bg-gray-200 p-4 rounded-lg shadow-xl">
+        <JobNumberInput 
+          jobNumber={jobNumber}
+          setJobNumber={setJobNumber}
+          isLoading={isLoading}
+          onSubmit={handleSubmit}
+        />
       </div>
-
-      <form onSubmit={handleSubmit} className="flex justify-center">
-        <div className="flex items-center w-full max-w-md">
-          <input
-            type="text"
-            value={jobNumber}
-            onChange={handleInputChange}
-            placeholder="Número de trabajo (8 o 10 dígitos)"
-            className="flex-grow bg-gray-800 border border-gray-700 rounded-l p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
-            aria-label="Ingrese número de trabajo"
-          />
-          <button 
-            type="submit" 
-            className="bg-blue-800 text-white px-4 py-2 rounded-r hover:bg-blue-800 transition duration-200 disabled:bg-gray-600"
-            disabled={addJobMutation.isLoading || (jobNumber.length !== 8 && jobNumber.length !== 10)}
-          >
-            {addJobMutation.isLoading ? 'Agregando...' : 'Agregar'}
-          </button>
-        </div>
-      </form>
 
       {error && (
         <Alert variant="destructive" className="bg-red-900 border-red-700 text-red-100">
@@ -105,18 +132,59 @@ export default function WorkerLabsARView() {
         </Alert>
       )}
 
-      <div className="flex justify-between items-center">
-        <Badge variant="secondary" className="text-lg bg-gray-800 text-gray-100">
-          Trabajos completados: {completedJobsCount}
-        </Badge>
+      <div className="flex justify-center space-x-4">
+        {statusFilterOptions.map(({ value, label }) => (
+          <Button
+            key={value}
+            onClick={() => setSelectedStatusFilter(value)}
+            variant={selectedStatusFilter === value ? "default" : "outline"}
+            className={`transition-all shadow-xl duration-200 ${
+              selectedStatusFilter === value 
+                ? "bg-blue-800" 
+                : theme === 'dark' ? "bg-slate-700" : "bg-slate-200"
+            }`}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
 
-      <TimeFrameSelector activeTimeFrame={activeTimeFrame} setActiveTimeFrame={setActiveTimeFrame} />
+      <TimeFrameSelector 
+        activeTimeFrame={activeTimeFrame} 
+        setActiveTimeFrame={setActiveTimeFrame}
+        data={allJobs}
+      />
+
+      {queueStatus.pending > 0 && (
+        <Alert>
+          <AlertDescription>
+            {queueStatus.pending} trabajos pendientes de sincronizar
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {queueStatus.failed > 0 && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {queueStatus.failed} trabajos fallidos
+            <Button onClick={() => jobQueue.retryFailedJobs()}>
+              Reintentar
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <JobTable 
-        title={`Trabajos de ${activeTimeFrame}`} 
-        jobs={sortedJobs}
+        title="Trabajos de Antireflejo"
+        jobs={filteredJobs}
         columns={COLUMNS}
+        timeFrame={activeTimeFrame}
+        enableScroll={true}
+        role="workerLabsAR"
+        onError={handleError}
+        onRefresh={refetch}
+        isLoading={isLoading}
+        pendingJobs={queueStatus.pending}
       />
 
       <SpreadsheetLink href={SPREADSHEET_URL} />

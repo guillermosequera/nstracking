@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchJobs } from '@/utils/jobUtils'
+import { fetchJobs, onDelete } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -13,18 +13,21 @@ import SpreadsheetLink from './SpreadsheetLink'
 import DriveFolderLink from './DriveFolderLink'
 import CommerceJobTable from './CommerceJobTable'
 import TimeFrameSelector from './TimeFrameSelector'
+import { useTimeFrameFilter } from './TimeFrameSelector'
+import { sheetIds } from '@/config/roles'
 import { getUserRole } from '@/config/roles'
 
-const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/11gPVktoCBHimINlJiNczAY4oiAeTLMGAHq8inxusF_w/edit?gid=0#gid=0'
+const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerCommerce}/edit?gid=0#gid=0`
 const DRIVE_FOLDER_URL = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_FOLDER_URL
-const COLUMNS = ['Número de Trabajo', 'Fecha y Hora', 'Fecha de Entrega', 'Número de Lensware', 'Archivo', 'Usuario']
-const ACTIVE_PAGE = 'commerce'
-
-const shortenAndLinkify = (url) => {
-  if (!url) return 'No disponible';
-  const fileName = url.split('/').pop();
-  return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">Ver ${fileName}</a>`;
-};
+const COLUMNS = [
+  { key: 'jobNumber', header: 'N° Orden' },
+  { key: 'timestamp', header: 'Fecha y Hora' },
+  { key: 'deliveryDate', header: 'Fecha de Entrega' },
+  { key: 'lenswareNumber', header: 'Número de Lensware' },
+  { key: 'file', header: 'Archivo' },
+  { key: 'user', header: 'Usuario' }
+]
+const ACTIVE_PAGE = 'workerCommerce'
 
 export default function WorkerCommerceView() {
   const [jobNumber, setJobNumber] = useState('')
@@ -34,32 +37,33 @@ export default function WorkerCommerceView() {
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
   const [pastedImagePreview, setPastedImagePreview] = useState(null)
   const formRef = useRef(null)
+
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
-  const { data: session, status } = useSession()
-  const [userRole, setUserRole] = useState(null)
+  const { data: session } = useSession()
 
-  useEffect(() => {
-    if (session?.user?.email) {
-      try {
-        const role = getUserRole(session.user.email);
-        if (!role) {
-          throw new Error('No se pudo obtener el rol');
-        }
-        setUserRole(role);
-      } catch (err) {
-        handleError(err);
-      }
-    }
-  }, [session, handleError]);
-
-  const { data: jobs, isLoading, refetch } = useQuery({
-    queryKey: ['jobs', activeTimeFrame, userRole],
-    queryFn: () => fetchJobs(activeTimeFrame, userRole),
+  const { data: allJobs = [], isLoading, refetch } = useQuery({
+    queryKey: ['commerce-jobs', activeTimeFrame],
+    queryFn: () => fetchJobs(activeTimeFrame, 'workerCommerce'),
     retry: 3,
     onError: handleError,
-    enabled: !!userRole && status === 'authenticated'
+    enabled: !!session?.user?.email,
+    refetchInterval: 30000
   })
+
+  const filteredJobs = useTimeFrameFilter(allJobs || [], activeTimeFrame)
+    .filter((job, index) => {
+      if (!job || index === 0) return false;
+      return true;
+    })
+    .map(job => ({
+      jobNumber: job[0],
+      timestamp: job[1],
+      deliveryDate: job[2],
+      lenswareNumber: job[3],
+      file: job[4],
+      user: job[5]
+    }));
 
   const addJobMutation = useMutation({
     mutationFn: async (jobData) => {
@@ -98,7 +102,7 @@ export default function WorkerCommerceView() {
       return response.json();
     },
     onSuccess: () => {
-      refetch();
+      queryClient.invalidateQueries(['commerce-jobs']);
       resetForm();
       clearError();
     },
@@ -131,7 +135,7 @@ export default function WorkerCommerceView() {
     }
     
     addJobMutation.mutate(jobData)
-  }, [jobNumber, deliveryDate, lenswareNumber, addJobMutation, handleError])
+  }, [addJobMutation, jobNumber, deliveryDate, lenswareNumber, file, pastedImagePreview, session?.user?.email])
 
   const handleJobNumberChange = (e) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 10)
@@ -160,73 +164,69 @@ export default function WorkerCommerceView() {
     }
   }, []);
 
-  const sortedJobs = useMemo(() => {
-    if (!jobs) return [];
-    return jobs
-      .map(job => {
-        const fileLink = shortenAndLinkify(job[4]);
-        return [...job.slice(0, 4), fileLink, ...job.slice(5)];
-      })
-      .sort((a, b) => new Date(b[1]) - new Date(a[1]));
-  }, [jobs]);
-
-  const completedJobsCount = sortedJobs.length
-
-  if (status === 'loading') return <div className="text-center text-gray-300">Cargando sesión...</div>
-
-  if (status === 'unauthenticated') return <div className="text-center text-red-500">No se ha iniciado sesión.</div>
-
-  if (!userRole) return <div className="text-center text-red-500">No se pudo determinar el rol del usuario.</div>
+  const handleDelete = useCallback(async (jobNumber, timestamp) => {
+    if (window.confirm(`¿Estás seguro de eliminar el trabajo ${jobNumber}?`)) {
+      try {
+        await onDelete(jobNumber, timestamp, 'workerCommerce', session?.user?.email);
+        queryClient.invalidateQueries(['commerce-jobs']);
+        clearError();
+      } catch (error) {
+        handleError(error);
+      }
+    }
+  }, [queryClient, clearError, handleError, session?.user?.email]);
 
   if (isLoading) return <div className="text-center text-gray-300">Cargando trabajos...</div>
 
   return (
     <div className="space-y-6 pb-16">
-      <form onSubmit={handleSubmit} className="space-y-4 bg-gray-900 p-4 rounded-lg" ref={formRef} onPaste={handlePaste}>
-        <div className="flex items-center w-full max-w-md mx-auto">
-          <Input
-            type="text"
-            value={jobNumber}
-            onChange={handleJobNumberChange}
-            placeholder="Número de trabajo (8 o 10 dígitos)"
-            className="flex-grow bg-gray-800 border border-gray-700 rounded-l p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
-          />
-          <Button 
-            type="submit" 
-            className="bg-blue-800 text-white px-4 py-2 rounded-r hover:bg-blue-700 transition duration-200 disabled:bg-gray-600"
-            disabled={addJobMutation.isLoading || (jobNumber.length !== 8 && jobNumber.length !== 10) || !deliveryDate}
-          >
-            {addJobMutation.isLoading ? 'Agregando...' : 'Agregar'}
-          </Button>
-        </div>
-        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-          <Input
-            type="date"
-            value={deliveryDate}
-            onChange={(e) => setDeliveryDate(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
-            required
-          />
-          <Input
-            type="text"
-            value={lenswareNumber}
-            onChange={(e) => setLenswareNumber(e.target.value)}
-            placeholder="Número de Lensware (opcional)"
-            className="bg-gray-800 border border-gray-700 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
-          />
-          <Input
-            type="file"
-            onChange={handleFileChange}
-            className="bg-gray-800 border border-gray-700 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
-          />
-          {pastedImagePreview && (
-            <div className="mt-2">
-              <p className="text-sm text-gray-300 mb-1">Imagen pegada:</p>
-              <img src={pastedImagePreview} alt="Pasted" className="max-w-full h-auto" />
-            </div>
-          )}
-        </div>
-      </form>
+      <div className="space-y-4 bg-gray-400 p-4 rounded-lg">
+        <form onSubmit={handleSubmit} ref={formRef} onPaste={handlePaste}>
+          <div className="flex items-center w-full my-4 max-w-md mx-auto shadow-xl">
+            <Input
+              type="text"
+              value={jobNumber}
+              onChange={handleJobNumberChange}
+              placeholder="Número de trabajo (8 o 10 dígitos)"
+              className="flex-grow bg-gray-300 border border-gray-700 rounded-l p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-800"
+            />
+            <Button 
+              type="submit" 
+              className="bg-blue-800 text-white px-4 py-2 rounded-r hover:bg-blue-700 transition duration-200 disabled:bg-gray-600"
+              disabled={addJobMutation.isLoading || (jobNumber.length !== 8 && jobNumber.length !== 10) || !deliveryDate}
+            >
+              {addJobMutation.isLoading ? 'Agregando...' : 'Agregar'}
+            </Button>
+          </div>
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            <Input
+              type="date"
+              value={deliveryDate}
+              onChange={(e) => setDeliveryDate(e.target.value)}
+              className="bg-gray-300 text-gray-800 shadow-xl border border-gray-700 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
+              required
+            />
+            <Input
+              type="text"
+              value={lenswareNumber}
+              onChange={(e) => setLenswareNumber(e.target.value)}
+              placeholder="Número de Lensware (opcional)"
+              className="bg-gray-300 text-gray-800 shadow-xl border border-gray-700 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
+            />
+            <Input
+              type="file"
+              onChange={handleFileChange}
+              className="bg-gray-300 text-gray-800 shadow-xl border border-gray-700 rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
+            />
+            {pastedImagePreview && (
+              <div className="mt-2">
+                <p className="text-sm text-gray-300 mb-1">Imagen pegada:</p>
+                <img src={pastedImagePreview} alt="Pasted" className="max-w-full h-auto" />
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
 
       {error && (
         <Alert variant="destructive" className="bg-red-900 border-red-700 text-red-100">
@@ -234,21 +234,23 @@ export default function WorkerCommerceView() {
         </Alert>
       )}
 
-      <div className="flex justify-between items-center">
-        <Badge variant="secondary" className="text-lg bg-gray-800 text-gray-100">
-          Trabajos completados: {completedJobsCount}
-        </Badge>
-      </div>
 
-      <TimeFrameSelector activeTimeFrame={activeTimeFrame} setActiveTimeFrame={setActiveTimeFrame} />
+      <TimeFrameSelector 
+        activeTimeFrame={activeTimeFrame} 
+        setActiveTimeFrame={setActiveTimeFrame}
+        data={allJobs}
+      />
 
-      <div className="overflow-x-auto bg-gray-900 rounded-lg shadow">
-        <CommerceJobTable 
-          title={`Trabajos de ${activeTimeFrame}`} 
-          jobs={sortedJobs}
-          columns={COLUMNS}
-        />
-      </div>
+      <CommerceJobTable 
+        title="Trabajos de Comercio"
+        jobs={filteredJobs}
+        columns={COLUMNS}
+        timeFrame={activeTimeFrame}
+        enableScroll={true}
+        role="workerCommerce"
+        onError={handleError}
+        onDelete={handleDelete}
+      />
 
       <SpreadsheetLink href={SPREADSHEET_URL} />
       <DriveFolderLink href={DRIVE_FOLDER_URL} />

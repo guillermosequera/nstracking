@@ -11,10 +11,11 @@ export const roles = {
                       'bodegacentral@italoptic.cl',
                       'bodegaitaloptic@gmail.com',
                       'bodegacentraltrento@gmail.com',
+                      'tecnico.ti@italoptic.cl',
                     ],
     workerCommerce: [
                       'ejecutivo4@italoptic.cl', 
-                      'tecnico.ti@italoptic.cl', 
+                      
                       'ejecutivo3@italoptic.cl', 
                       'contacto@italoptic.cl', 
                       'ejecutivo2@italoptic.cl',
@@ -22,12 +23,12 @@ export const roles = {
                       'conveniostrento@opticatrento.cl',
                       'contacto@opticatrento.cl',
                     ],
-    workerQuality: ['control.calidad@italoptic.cl', 'italopticasistentemantencion@gmail.com'],
+    workerQuality: ['control.calidad@italoptic.cl'],
     workerLabs: ['superficie@italoptic.cl'],
     workerLabsAR: ['aritaloptic@gmail.com'],
     workerLabsMineral: ['mineralesitaloptic@gmail.com'],
     workerMontage: ['italopticmontaje@gmail.com'],
-    workerDispatch: ['asisdepachoitaloptic@gmail.com', 'asisdepachoitaloptic2@gmail.com', 'despacho@italoptic.cl'],
+    workerDispatch: ['asisdepachoitaloptic@gmail.com', 'asisdepachoitaloptic2@gmail.com', 'despacho@italoptic.cl', 'italopticasistentemantencion@gmail.com'],
   };
   
   export const sheetIds = {
@@ -48,14 +49,36 @@ export const roles = {
     status: process.env.NEXT_PUBLIC_SHEET_ID_STATUS_SHEET,
     merma: process.env.NEXT_PUBLIC_SHEET_ID_MERMA_SHEET,
     garantia: process.env.NEXT_PUBLIC_SHEET_ID_WARRANTY_SHEET,
+    unassignedDispatch: process.env.NEXT_PUBLIC_SHEET_ID_UNASSIGNED_DISPATCH_SHEET,
   };
   
   export function getUserRole(email) {
-    for (const [role, emails] of Object.entries(roles)) {
-      if (emails.includes(email)) {
+    if (!email) {
+      console.log('getUserRole: Email no proporcionado');
+      return null;
+    }
+  
+    console.log('getUserRole: Verificando email:', email);
+  
+    // Primero verificar roles de trabajador
+    for (const role of workerRoles) {
+      console.log(`Verificando rol ${role}`);
+      if (roles[role].includes(email)) {
+        console.log(`Email encontrado en rol ${role}`);
         return role;
       }
     }
+  
+    // Si no es trabajador, verificar roles admin
+    for (const role of adminRoles) {
+      console.log(`Verificando rol ${role}`);
+      if (roles[role].includes(email)) {
+        console.log(`Email encontrado en rol ${role}`);
+        return role;
+      }
+    }
+  
+    console.log('No se encontró rol para el email');
     return null;
   }
   

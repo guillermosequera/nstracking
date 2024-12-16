@@ -61,10 +61,10 @@
       { "value": "OTROS", "label": "OTROS" }
     ],
     "agreementOptions": [
-      { "value": "agreement1", "label": "Convenio 1" },
-      { "value": "agreement2", "label": "Convenio 2" },
-      { "value": "agreement3", "label": "Convenio 3" },
-      { "value": "agreement4", "label": "Convenio 4" },
-      { "value": "agreement5", "label": "Convenio 5" }
+      { "value": "metropolitana", "label": "Convenio 1" },
+      { "value": "chiloe", "label": "Convenio 2" },
+      { "value": "punta arenas", "label": "Convenio 3" },
+      { "value": "putre", "label": "Convenio 4" },
+      { "value": "palena", "label": "Convenio 5" }
     ]
   }

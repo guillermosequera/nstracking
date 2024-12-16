@@ -29,6 +29,10 @@ export async function middleware(req) {
         console.log('Redirecting adminRRHH to /admin/rrhh');
         return NextResponse.redirect(new URL('/admin/rrhh', req.url));
       }
+      if (userRole === 'adminProduction') {
+        console.log('Redirecting adminProduction to /admin/production');
+        return NextResponse.redirect(new URL('/admin/production', req.url));
+      }
       console.log('Redirecting admin to /admin');
       return NextResponse.redirect(new URL('/admin', req.url));
     } else if (workerRoles.includes(userRole)) {
@@ -58,6 +62,15 @@ export async function middleware(req) {
       console.log('Unauthorized access to admin route, redirecting to /status');
       return NextResponse.redirect(new URL('/status', req.url));
     }
+    
+    // Agregar protección específica para production-matrix
+    if (path.startsWith('/api/production-matrix') && userRole !== 'adminProduction') {
+      return new NextResponse(
+        JSON.stringify({ error: 'No autorizado' }),
+        { status: 403, headers: { 'content-type': 'application/json' } }
+      );
+    }
+
     if (userRole === 'adminRRHH') {
       if (!path.startsWith('/admin/rrhh')) {
         console.log('Redirecting adminRRHH to /admin/rrhh');
@@ -114,7 +127,8 @@ export const config = {
     '/',
     '/admin/:path*',
     '/worker/:path*',
-    '/status', 
+    '/status',
+    '/delayed',
     '/developer/:path*',
     '/auth/signin',
   ],

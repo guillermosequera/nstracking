@@ -37,7 +37,15 @@ const getGCPCredentials = () => {
     const body = await request.json();
     console.log('Datos recibidos:', body);
   
-    const { jobNumber, timestamp, crystalType, userEmail, role, activePage, status } = body;
+    const { 
+      jobNumber, 
+      userEmail, 
+      role, 
+      activePage, 
+      status
+    } = body;
+  
+    const timestamp = new Date().toISOString();
     const sheetId = sheetIds[role];
     const statusSheetId = sheetIds['status'];
   
@@ -50,11 +58,22 @@ const getGCPCredentials = () => {
       const auth = getAuthClient();
       const sheets = google.sheets({ version: 'v4', auth });
   
-      const values = [[jobNumber, timestamp, crystalType, userEmail]];
-      const correctStatus = getStatusFromPage(activePage);
-      const statusValues = [[jobNumber, timestamp, activePage, correctStatus, userEmail, crystalType]];
+      const values = [[
+        jobNumber, 
+        timestamp, 
+        status,
+        userEmail
+      ]];
   
-      // Agregar a la hoja del área
+      const statusValues = [[
+        jobNumber, 
+        timestamp, 
+        activePage,
+        status,
+        userEmail,
+        ''
+      ]];
+  
       console.log('Intentando añadir datos a la hoja del área:', values);
       const areaResponse = await sheets.spreadsheets.values.append({
         spreadsheetId: sheetId,
@@ -63,7 +82,6 @@ const getGCPCredentials = () => {
         requestBody: { values },
       });
   
-      // Agregar a la hoja de estado
       console.log('Intentando añadir datos a la hoja de estado:', statusValues);
       const statusResponse = await sheets.spreadsheets.values.append({
         spreadsheetId: statusSheetId,
@@ -76,7 +94,12 @@ const getGCPCredentials = () => {
       console.log('Respuesta de append (estado):', JSON.stringify(statusResponse.data, null, 2));
   
       return NextResponse.json({ 
-        newJob: { jobNumber, timestamp, crystalType, userEmail, status: correctStatus },
+        newJob: { 
+          jobNumber, 
+          timestamp, 
+          status, 
+          userEmail 
+        },
         message: 'AR job added successfully to both sheets'
       });
     } catch (error) {

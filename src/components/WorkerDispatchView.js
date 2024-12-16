@@ -1,241 +1,266 @@
 'use client'
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchJobs, addDispatchJob } from '@/utils/jobUtils'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchJobs, addDispatchJob, addJob } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
-import { Select } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { useSession } from 'next-auth/react'
+import { useTimeFrameData } from './TimeFrameSelector'
 import SpreadsheetLink from './SpreadsheetLink'
 import JobTable from './JobTable'
+import TimeFrameSelector from './TimeFrameSelector'
+import { sheetIds } from '@/config/roles'
+import JobNumberInput from './JobNumberInput'
+import { useTheme } from 'next-themes'
+import { jobQueue } from '@/utils/jobQueue'
 import dispatchOptions from '@/data/dispatchOptions.json'
+import Legend from '@/components/Legend'
 
-const ACTIVE_PAGE = 'dispatch'
-const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1i4p-uWu1e6aniq-Vbq-RDciVqDZJqM4lSMd1Uv4Dp-o/edit?gid=0#gid=0'
-
-const timeFrames = [
-  { key: 'today', label: 'Hoy' },
-  { key: 'yesterday', label: 'Ayer' },
-  { key: 'twoDaysAgo', label: 'Antes de Ayer' },
-  { key: 'week', label: 'Esta Semana' },
-  { key: 'month', label: 'Este Mes' },
-  { key: 'lastMonth', label: 'Mes Pasado' }
+const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerDispatch}/edit#gid=0`
+const COLUMNS = [
+  { key: 'jobNumber', header: 'N° Orden' },
+  { key: 'timestamp', header: 'Fecha y Hora' },
+  { key: 'company', header: 'Empresa' },
+  { key: 'client', header: 'Cliente' },
+  { key: 'invoice', header: 'Factura' },
+  { key: 'shippingCompany', header: 'Empresa de Envío' },
+  { key: 'shippingOrder', header: 'Orden de Envío' },
+  { key: 'user', header: 'Usuario' },
+  { key: 'status', header: 'Estado' }
 ]
 
+const ACTIVE_PAGE = 'workerDispatch'
 const companyOptions = [
-  { value: 'todos', label: 'Todos' },
-  { value: 'trento', label: 'Trento' },
   { value: 'italoptic', label: 'Italoptic' },
+  { value: 'trento', label: 'Trento' }
 ]
-
 const shippingCompanyOptions = [
-  { value: 'OF. VARMONTT', label: 'OF. VARMONTT' },
-  { value: 'STARKEN', label: 'STARKEN' },
-  { value: 'LEMONDECARGO', label: 'LEMONDECARGO' },
-  { value: 'CHILEEXPRESS', label: 'CHILEEXPRESS' },
-  { value: 'CORREOS DE CHILE', label: 'CORREOS DE CHILE' },
-  { value: 'ESPECIFICAR', label: 'EXCEPCION' },
+  { value: 'chilexpress', label: 'Chilexpress' },
+  { value: 'correos', label: 'Correos de Chile' },
+  { value: 'starken', label: 'Starken' },
+  { value: 'otro', label: 'Otro' }
 ]
-
-const validationRules = {
-  'OF. VARMONTT': /^\d{7}$/,
-  'STARKEN': /^\d{9}$/,
-  'LEMONDECARGO': /^\d{6}$/,
-  'CHILEEXPRESS': /^\d{12}$/,
-  'CORREOS DE CHILE': /^\d{9}$/,
-  'ESPECIFICAR': /^[a-z0-9]+$/
-}
-
-const shippingOrderPlaceholders = {
-  'OF. VARMONTT': '7 dígitos',
-  'STARKEN': '9 dígitos',
-  'LEMONDECARGO': '6 dígitos',
-  'CHILEEXPRESS': '12 dígitos',
-  'CORREOS DE CHILE': '9 dígitos',
-  'ESPECIFICAR': 'Ingrese la orden de envío'
-}
+const LEGENDS = [
+  { value: "00000001", standard: "Guías" },
+  { value: "00000002", standard: "Armazones" },
+  { value: "00000003", standard: "Estuches" },
+  { value: "00000004", standard: "Cheques" },
+  { value: "00000005", standard: "Publicidad" },
+  { value: "00000006", standard: "Documentos" }
+]
 
 export default function WorkerDispatchView() {
+  const { theme } = useTheme()
   const [jobNumber, setJobNumber] = useState('')
   const [company, setCompany] = useState('')
-  const [agreement, setAgreement] = useState('')
   const [client, setClient] = useState('')
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [shippingCompany, setShippingCompany] = useState('')
   const [shippingOrder, setShippingOrder] = useState('')
-  const [activeTimeFrame, setActiveTimeFrame] = useState('today')
-  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState('todos')
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState('Sin Asignar')
+  const [queueStatus, setQueueStatus] = useState({ pending: 0, failed: 0 })
+  
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
   const { data: session } = useSession()
 
-  const { data: jobs, isLoading, refetch } = useQuery({
-    queryKey: ['jobs', activeTimeFrame, 'dispatch', selectedCompanyFilter],
-    queryFn: () => fetchJobs(activeTimeFrame, 'workerDispatch', selectedCompanyFilter),
+  const { data: allJobs = [], isLoading, refetch } = useQuery({
+    queryKey: ['dispatch-jobs', selectedCompanyFilter],
+    queryFn: async () => {
+      console.log('Fetching jobs...');
+      const data = await fetchJobs('all', 'workerDispatch', selectedCompanyFilter || '');
+      return data;
+    },
     retry: 3,
-    onError: handleError
+    onError: handleError,
+    enabled: !!session?.user?.email,
+    refetchOnWindowFocus: false,
+    staleTime: 300000,
+    cacheTime: 600000
   })
 
-  const addJobMutation = useMutation({
-    mutationFn: (jobData) => addDispatchJob(jobData, session.user.email),
-    onSuccess: () => {
-      refetch()
-      resetForm()
-      clearError()
-    },
-    onError: handleError
-  })
+  const filteredJobs = useMemo(() => {
+    if (!allJobs?.length) {
+      console.log('No hay trabajos disponibles');
+      return [];
+    }
+
+    console.log('Filtrando trabajos:', allJobs.length);
+
+    return allJobs
+      .filter(job => {
+        if (!job || !Array.isArray(job)) return false;
+        const companyValue = job[2];
+        return selectedCompanyFilter === 'Sin Asignar' 
+          ? !companyValue || companyValue === 'Sin Asignar'
+          : companyValue === selectedCompanyFilter;
+      })
+      .map(job => ({
+        jobNumber: job[0],
+        timestamp: job[1],
+        timestampFormatted: new Date(job[1]).toLocaleString('es-ES', {
+          dateStyle: 'medium',
+          timeStyle: 'medium'
+        }),
+        company: job[2] || 'Sin Asignar',
+        client: job[3] || '',
+        invoice: job[4] || '',
+        shippingCompany: job[5] || '',
+        shippingOrder: job[6] || '',
+        user: job[7] || '',
+        status: job[8] || 'En despacho'
+      }));
+  }, [allJobs, selectedCompanyFilter]);
+
+  useEffect(() => {
+    if (allJobs?.length > 0) {
+      console.log('Datos iniciales cargados:', allJobs.length);
+    }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const interval = setInterval(() => {
+      if (!mounted) return;
+      
+      const status = jobQueue.getStatus();
+      if (JSON.stringify(status) !== JSON.stringify(queueStatus)) {
+        setQueueStatus(status);
+        
+        if (status.pending === 0 && queueStatus.pending > 0) {
+          refetch();
+        }
+      }
+    }, 1000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [queueStatus, refetch]);
 
   const resetForm = () => {
     setJobNumber('')
     setCompany('')
-    setAgreement('')
     setClient('')
     setInvoiceNumber('')
     setShippingCompany('')
     setShippingOrder('')
   }
 
-  const isShippingOrderValid = useCallback(() => {
-    if (!shippingCompany || !shippingOrder) return false
-    return validationRules[shippingCompany].test(shippingOrder)
-  }, [shippingCompany, shippingOrder])
-
-  const isFormValid = useCallback(() => {
-    const conditions = [
-      jobNumber.length === 8 || jobNumber.length === 10,
-      company
-    ]
-    const companySpecificConditions = {
-      'trento': () => !!agreement,
-      'italoptic': () => client && invoiceNumber && shippingCompany && isShippingOrderValid()
+  const handleSubmit = useCallback((jobNumberValue) => {
+    try {
+      const jobData = {
+        jobNumber: jobNumberValue,
+        timestamp: new Date().toISOString(),
+        company: company || 'Sin Asignar',
+        client: client || '',
+        invoiceNumber: invoiceNumber || '',
+        shippingCompany: shippingCompany || '',
+        shippingOrder: shippingOrder || '',
+        userEmail: session?.user?.email,
+        status: company ? 'Salida despacho' : 'En despacho',
+        role: 'workerDispatch',
+      }
+      
+      jobQueue.add(jobData)
+      resetForm()
+      clearError()
+    } catch (error) {
+      handleError(error)
     }
-    if (companySpecificConditions[company]) {
-      conditions.push(companySpecificConditions[company]())
+  }, [company, client, invoiceNumber, shippingCompany, shippingOrder, session?.user?.email, clearError, handleError])
+
+  const renderFormFields = () => {
+    if (!company) return null
+
+    const commonClasses = "w-full max-w-xs mx-auto text-sm"
+
+    if (company === 'italoptic') {
+      return (
+        <div className="space-y-2 w-full max-w-md mx-auto">
+          <Select
+            value={client}
+            onValueChange={setClient}
+            options={dispatchOptions.clientOptions}
+            placeholder="Seleccione cliente"
+            className={commonClasses}
+          />
+          <Input
+            type="text"
+            value={invoiceNumber}
+            onChange={(e) => setInvoiceNumber(e.target.value)}
+            placeholder="Número de factura"
+            className={commonClasses}
+          />
+          <Select
+            value={shippingCompany}
+            onValueChange={setShippingCompany}
+            options={shippingCompanyOptions}
+            placeholder="Seleccione empresa de envío"
+            className={commonClasses}
+          />
+          <Input
+            type="text"
+            value={shippingOrder}
+            onChange={(e) => setShippingOrder(e.target.value)}
+            placeholder="Orden de envío"
+            className={commonClasses}
+          />
+        </div>
+      )
     }
-    return conditions.every(Boolean)
-  }, [jobNumber, company, agreement, client, invoiceNumber, shippingCompany, isShippingOrderValid])
 
-  const handleSubmit = useCallback((e) => {
-    e.preventDefault()
-    if (!isFormValid()) return
-
-    let jobData = {
-      jobNumber,
-      company,
-      ...(company === 'trento' 
-        ? { agreement }
-        : {
-            client,
-            invoiceNumber,
-            shippingCompany,
-            shippingOrder
-          })
+    if (company === 'trento') {
+      return (
+        <div className="w-full max-w-md mx-auto">
+          <Select
+            value={invoiceNumber}
+            onValueChange={setInvoiceNumber}
+            options={dispatchOptions.agreementOptions}
+            placeholder="Seleccione el convenio"
+            className={commonClasses}
+          />
+        </div>
+      )
     }
 
-    addJobMutation.mutate(jobData)
-  }, [jobNumber, company, agreement, client, invoiceNumber, shippingCompany, shippingOrder, isFormValid, addJobMutation])
-
-  const handleJobNumberChange = (e) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 10)
-    setJobNumber(value)
+    return null
   }
 
-  const sortedJobs = useMemo(() => {
-    if (!jobs) return []
-    return [...jobs].sort((a, b) => new Date(b[1]) - new Date(a[1]))
-  }, [jobs])
-
-  const filteredJobs = useMemo(() => {
-    if (selectedCompanyFilter === 'todos') return sortedJobs
-    return sortedJobs.filter(job => job[2] === selectedCompanyFilter)
-  }, [sortedJobs, selectedCompanyFilter])
-
-  const completedJobsCount = filteredJobs.length
-
-  useEffect(() => {
-    if (shippingCompany === 'ESPECIFICAR') {
-      setShippingOrder('')
+  const handleCompanyFilterChange = (value) => {
+    if (value === '') {
+      setSelectedCompanyFilter('Sin Asignar');
+    } else {
+      setSelectedCompanyFilter(value);
     }
-  }, [shippingCompany])
-
-  if (isLoading) return <div className="text-center text-gray-300">Cargando trabajos...</div>
+  };
 
   return (
     <div className="space-y-6 pb-16">
-      <form onSubmit={handleSubmit} className="space-y-4 bg-gray-900 p-4 rounded-lg">
-        <div className="flex items-center w-full max-w-md mx-auto">
-          <Input
-            type="text"
-            value={jobNumber}
-            onChange={handleJobNumberChange}
-            placeholder="Número de trabajo (8 o 10 dígitos)"
-            className="flex-grow bg-gray-800 border border-gray-700 rounded-l p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100"
-          />
-          <button 
-            type="submit" 
-            className="bg-blue-800 text-white px-4 py-2 rounded-r hover:bg-blue-700 transition duration-200 disabled:bg-gray-600"
-            disabled={addJobMutation.isLoading || !isFormValid()}
-          >
-            {addJobMutation.isLoading ? 'Agregando...' : 'Agregar'}
-          </button>
-        </div>
-        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-          <Select
-            value={company}
-            onValueChange={setCompany}
-            options={companyOptions.filter(opt => opt.value !== 'todos')}
-            placeholder="Seleccione la empresa"
-          />
-          {company === 'trento' && (
-            <Select
-              value={agreement}
-              onValueChange={setAgreement}
-              options={dispatchOptions.agreementOptions}
-              placeholder="Seleccione el tipo de convenio"
-            />
-          )}
-          {company === 'italoptic' && (
-            <>
-              <Select
-                value={client}
-                onValueChange={setClient}
-                options={dispatchOptions.clientOptions}
-                placeholder="Seleccione el cliente"
-              />
-              <Input
-                type="text"
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-                placeholder="Número de factura"
-              />
-              <Select
-                value={shippingCompany}
-                onValueChange={setShippingCompany}
-                options={shippingCompanyOptions}
-                placeholder="Seleccione la empresa de envío"
-              />
-              <Input
-                type="text"
-                value={shippingOrder}
-                onChange={(e) => setShippingOrder(e.target.value.toLowerCase())}
-                placeholder={shippingOrderPlaceholders[shippingCompany] || "Orden de envío"}
-                className={`bg-gray-800 border rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100 ${
-                  shippingCompany && shippingOrder
-                    ? isShippingOrderValid()
-                      ? 'border-green-500'
-                      : 'border-red-500'
-                    : 'border-gray-700'
-                }`}
-              />
-            </>
-          )}
-        </div>
-      </form>
+      <div className="space-y-4 bg-gray-200 p-4 rounded-lg">
+        <JobNumberInput
+          jobNumber={jobNumber}
+          setJobNumber={setJobNumber}
+          isLoading={false}
+          onSubmit={handleSubmit}
+          hideStatusSelector={true}
+        />
+
+        <Select
+          value={company}
+          onValueChange={setCompany}
+          options={companyOptions}
+          placeholder="Seleccione la empresa (opcional)"
+          className="w-full max-w-xs mx-auto text-sm bg-slate-200 text-slate-900"
+        />
+
+        {renderFormFields()}
+      </div>
 
       {error && (
         <Alert variant="destructive" className="bg-red-900 border-red-700 text-red-100">
@@ -243,46 +268,61 @@ export default function WorkerDispatchView() {
         </Alert>
       )}
 
-      <div className="flex justify-between items-center">
-        <Badge variant="secondary" className="text-lg bg-gray-800 text-gray-100">
-          Trabajos completados: {completedJobsCount}
-        </Badge>
+      <div className="flex justify-center space-x-4">
+        <Button
+          onClick={() => handleCompanyFilterChange('')}
+          variant={selectedCompanyFilter === 'Sin Asignar' ? "default" : "outline"}
+          className={selectedCompanyFilter === 'Sin Asignar' ? "bg-blue-800" : ""}
+        >
+          En Despacho
+        </Button>
+        {companyOptions.map(({ value, label }) => (
+          <Button
+            key={value}
+            onClick={() => handleCompanyFilterChange(value)}
+            variant={selectedCompanyFilter === value ? "default" : "outline"}
+            className={selectedCompanyFilter === value ? "bg-blue-800" : ""}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
 
-      <div className="space-y-4">
-        <div className="flex flex-wrap gap-2 justify-center">
-          <div className="flex gap-2">
-            {companyOptions.map(({ value, label }) => (
-              <Button
-                key={value}
-                onClick={() => setSelectedCompanyFilter(value)}
-                variant={selectedCompanyFilter === value ? "default" : "outline"}
-                className={`transition-all duration-200 ${selectedCompanyFilter === value ? "bg-blue-800 text-white" : "bg-gray-700 text-gray-400"}`}
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
-          {timeFrames.map(({ key, label }) => (
-            <Button
-              key={key}
-              onClick={() => setActiveTimeFrame(key)}
-              variant={activeTimeFrame === key ? "default" : "outline"}
-              className={`transition-all duration-200 ${activeTimeFrame === key ? "bg-blue-800 text-white" : "bg-gray-700 text-gray-400"}`}
-            >
-              {label}
+      {queueStatus.pending > 0 && (
+        <Alert>
+          <AlertDescription>
+            {queueStatus.pending} trabajos pendientes de sincronizar
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {queueStatus.failed > 0 && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {queueStatus.failed} trabajos fallidos
+            <Button onClick={() => jobQueue.retryFailedJobs()}>
+              Reintentar
             </Button>
-          ))}
-        </div>
-        <div className="overflow-x-auto bg-gray-900 rounded-lg shadow">
-          <JobTable 
-            title={`Trabajos de ${timeFrames.find(tf => tf.key === activeTimeFrame).label}`} 
-            jobs={filteredJobs} 
-            columns={['Número de Trabajo', 'Fecha y Hora', 'Empresa', 'Cliente/Convenio', 'Factura', 'Empresa de Envío', 'Orden de Envío', 'Usuario']}
-          />
-        </div>
-      </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
+      <JobTable 
+        title="Trabajos de Despacho"
+        jobs={filteredJobs}
+        columns={COLUMNS}
+        enableScroll={true}
+        role="workerDispatch"
+        onError={handleError}
+        onRefresh={() => {
+          console.log('Actualizando datos manualmente...');
+          refetch();
+        }}
+        isLoading={isLoading}
+        pendingJobs={queueStatus.pending}
+      />
+
+      <Legend legends={LEGENDS} />
       <SpreadsheetLink href={SPREADSHEET_URL} />
     </div>
   )

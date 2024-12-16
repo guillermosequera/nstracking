@@ -1,29 +1,29 @@
 import { google } from 'googleapis';
 import { NextResponse } from 'next/server';
 import { sheetIds } from '@/config/roles';
-import { getGCPCredentials, getAuthClient } from '@/utils/googleAuth';
-
-const TIMEOUT = 3000;
-
+import { getAuthClient } from '@/utils/googleAuth';
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const sheet = searchParams.get('sheet');
-    const timeFrame = searchParams.get('timeFrame');
-  
+
+    if (!sheet) {
+        return NextResponse.json({ error: 'Sheet parameter is required' }, { status: 400 });
+    }
+
     let sheetId;
     switch (sheet) {
-      case 'quality':
-        sheetId = sheetIds.workerQuality;
-        break;
-      case 'merma':
-        sheetId = sheetIds.merma;
-        break;
-      case 'garantia':
-        sheetId = sheetIds.garantia;
-        break;
-      default:
-        return NextResponse.json({ error: 'Invalid sheet' }, { status: 400 });
+        case 'quality':
+            sheetId = sheetIds.workerQuality;
+            break;
+        case 'merma':
+            sheetId = sheetIds.merma;
+            break;
+        case 'garantia':
+            sheetId = sheetIds.garantia;
+            break;
+        default:
+            return NextResponse.json({ error: 'Invalid sheet type' }, { status: 400 });
     }
 
     try {
@@ -31,86 +31,185 @@ export async function GET(request) {
         const sheets = google.sheets({ version: 'v4', auth });
     
         const response = await sheets.spreadsheets.values.get({
-          spreadsheetId: sheetId,
-          range: 'A:F', // Ajusta esto según tu estructura de hoja
+            spreadsheetId: sheetId,
+            range: 'A:G',
         });
     
-        const rows = response.data.values;
-
-
+        const rows = response.data.values || [];
         return NextResponse.json(rows);
-  } catch (error) {
-    console.error('Error fetching quality sheet data:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
+    } catch (error) {
+        console.error('Error fetching quality data:', error);
+        return NextResponse.json(
+            { error: error.message || 'Error interno del servidor' }, 
+            { status: 500 }
+        );
+    }
 }
-
 
 export async function POST(request) {
     console.log('Iniciando solicitud POST para Control de Calidad');
     const body = await request.json();
     console.log('Datos recibidos:', body);
-    const { jobNumber, timestamp, userEmail, controlType, result, notes, targetSheet, status } = body;
 
-  // Determinar el ID de la hoja de destino
-  let sheetId;
-  switch (targetSheet) {
-    case 'merma':
-      sheetId = sheetIds.merma;
-      break;
-    case 'garantia':
-      sheetId = sheetIds.garantia;
-      break;
-    case 'quality':
-      sheetId = sheetIds.workerQuality;
-      break;
-    default:
-      console.error(`Sheet ID no encontrado para: ${targetSheet}`);
-      return NextResponse.json({ error: `Invalid target sheet: ${targetSheet}` }, { status: 400 });
-  }
+    const { 
+        jobNumber, 
+        status,
+        userEmail,
+        notes = ''
+    } = body;
 
-  const statusSheetId = sheetIds.status;
+    const timestamp = new Date().toISOString();
+    const qualitySheetId = sheetIds.workerQuality;
+    const statusSheetId = sheetIds.status;
 
-  if (!sheetId) {
-    console.error(`Sheet ID no encontrado para: ${targetSheet}`);
-    return NextResponse.json({ error: 'Invalid target sheet' }, { status: 400 });
-  }
+    try {
+        const auth = getAuthClient();
+        const sheets = google.sheets({ version: 'v4', auth });
 
-  try {
-    const auth = getAuthClient();
-    const sheets = google.sheets({ version: 'v4', auth });
+        // Valores para ambas hojas
+        const qualityValues = [[
+            jobNumber,
+            timestamp,
+            userEmail,
+            status,
+            notes
+        ]];
 
-    const values = [[jobNumber, timestamp, userEmail, controlType, result, notes]];
-    const statusValues = [[jobNumber, timestamp, 'quality', status, userEmail, controlType, result, notes]];
+        const statusValues = [[
+            jobNumber,
+            timestamp,
+            'quality',
+            status,
+            userEmail,
+            notes
+        ]];
 
-    // Agregar a la hoja correspondiente (calidad, merma o garantía)
-    console.log(`Intentando añadir datos a la hoja de ${targetSheet}:`, values);
-    const sheetResponse = await sheets.spreadsheets.values.append({
-      spreadsheetId: sheetId,
-      range: 'A:F',
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values },
+        // Agregar a la hoja de calidad
+        await sheets.spreadsheets.values.append({
+            spreadsheetId: qualitySheetId,
+            range: 'A:E',
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: qualityValues },
+        });
+
+        // Agregar a la hoja de status
+        await sheets.spreadsheets.values.append({
+            spreadsheetId: statusSheetId,
+            range: 'A:F',
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: statusValues },
+        });
+
+        return NextResponse.json({ 
+            newJob: { 
+                jobNumber, 
+                timestamp, 
+                status, 
+                userEmail,
+                notes 
+            },
+            message: 'Quality job added successfully to both sheets'
+        });
+    } catch (error) {
+        console.error('Error en POST /api/quality:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
+
+export async function DELETE(request) {
+    console.log('Iniciando solicitud DELETE para Control de Calidad');
+    const { searchParams } = new URL(request.url);
+    const jobNumber = searchParams.get('jobNumber');
+    const timestamp = searchParams.get('timestamp');
+
+    if (!jobNumber) {
+        return NextResponse.json({ error: 'Job number is required' }, { status: 400 });
+    }
+
+    try {
+        const auth = getAuthClient();
+        const sheets = google.sheets({ version: 'v4', auth });
+
+        // 1. Eliminar de la hoja de calidad
+        const qualityRowData = await deleteFromSheet(
+            sheets, 
+            sheetIds.workerQuality, 
+            jobNumber,
+            timestamp
+        );
+
+        if (!qualityRowData) {
+            throw new Error('No se encontró el trabajo en la hoja de calidad');
+        }
+
+        // 2. Eliminar de la hoja status
+        await deleteFromSheet(
+            sheets, 
+            sheetIds.status, 
+            jobNumber,
+            qualityRowData.timestamp
+        );
+
+        return NextResponse.json({ 
+            message: 'Trabajo eliminado correctamente',
+            deletedJob: qualityRowData
+        });
+
+    } catch (error) {
+        console.error('Error en DELETE /api/quality:', error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
+
+async function deleteFromSheet(sheets, spreadsheetId, jobNumber, timestamp) {
+    const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: 'A:E',
     });
 
-    // Agregar a la hoja de estado
-    console.log('Intentando añadir datos a la hoja de estado:', statusValues);
-    const statusResponse = await sheets.spreadsheets.values.append({
-      spreadsheetId: statusSheetId,
-      range: 'A:H',
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: statusValues },
+    const rows = response.data.values || [];
+    console.log(`Buscando trabajo ${jobNumber} con timestamp ${timestamp}`);
+
+    const rowIndex = rows.findIndex(row => {
+        if (!row[0] || !row[1]) return false;
+        
+        const rowJobNumber = row[0].toString().trim();
+        const rowTimestamp = row[1].toString().trim();
+        
+        return rowJobNumber === jobNumber.toString() && 
+               (timestamp ? rowTimestamp === timestamp : true);
     });
 
-    console.log(`Respuesta de append (${targetSheet}):`, JSON.stringify(sheetResponse.data, null, 2));
-    console.log('Respuesta de append (estado):', JSON.stringify(statusResponse.data, null, 2));
+    if (rowIndex === -1) {
+        console.log(`Trabajo ${jobNumber} no encontrado en la hoja ${spreadsheetId}`);
+        return null;
+    }
 
-    return NextResponse.json({ 
-      newJob: { jobNumber, timestamp, userEmail, status, controlType, result, notes },
-      message: `Job added successfully to ${targetSheet} and status sheets`
+    // Guardar los datos antes de eliminar
+    const rowData = {
+        jobNumber: rows[rowIndex][0],
+        timestamp: rows[rowIndex][1],
+        user: rows[rowIndex][2],
+        status: rows[rowIndex][3],
+        notes: rows[rowIndex][4]
+    };
+
+    // Eliminar la fila
+    await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+            requests: [{
+                deleteDimension: {
+                    range: {
+                        sheetId: 0,
+                        dimension: 'ROWS',
+                        startIndex: rowIndex,
+                        endIndex: rowIndex + 1
+                    }
+                }
+            }]
+        }
     });
-  } catch (error) {
-    console.error('Error en POST /api/quality:', error);
-    console.error('Stack trace:', error.stack);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+
+    return rowData;
 }

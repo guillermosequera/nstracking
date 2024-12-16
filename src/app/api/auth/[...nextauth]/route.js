@@ -1,9 +1,9 @@
 // src/app/api/auth/[...nextauth]/route.js
-import NextAuth from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
-import { getUserRole } from "@/config/roles";
+import NextAuth from 'next-auth';
+import GoogleProvider from 'next-auth/providers/google';
+import { getUserRole } from '@/config/roles';
 
-export const authOptions = {
+const handler = NextAuth({
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -11,34 +11,32 @@ export const authOptions = {
     }),
   ],
   callbacks: {
-    async signIn({ account, profile }) {
-      console.log("signIn", account, profile);
-      
-      return account.provider === "google" && profile.email_verified === true;
+    async signIn({ user, account }) {
+      console.log('Iniciando proceso de signIn:', user.email);
+      return true;
     },
     async jwt({ token, user }) {
       if (user) {
-        token.role = getUserRole(user.email);
+        // Obtener el rol usando la función actualizada
+        const role = getUserRole(user.email);
+        console.log('JWT Callback - Email:', user.email, 'Role asignado:', role);
+        token.role = role;
+        token.email = user.email;
       }
-      console.log("jwt", token);
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
+      if (session?.user) {
         session.user.role = token.role;
+        console.log('Session Callback - Usuario:', session.user.email, 'Role:', session.user.role);
       }
-      console.log("session", session);
       return session;
     },
   },
   pages: {
     signIn: '/auth/signin',
+    error: '/auth/error',
   },
-  session: {
-    strategy: "jwt",
-  },
-};
-
-const handler = NextAuth(authOptions);
+});
 
 export { handler as GET, handler as POST };

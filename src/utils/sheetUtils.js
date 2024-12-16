@@ -31,3 +31,26 @@ export async function fetchAllSheetData() {
     throw error;
   }
 }
+
+export async function fetchSheetAPI(action, sheetId, params = {}) {
+  try {
+    const response = await fetch('/api/sheets', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action,
+        sheetId,
+        ...params
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Error en la solicitud: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error en fetchSheetAPI:', error);
+    throw error;
+  }
+}

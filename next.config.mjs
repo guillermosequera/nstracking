@@ -3,14 +3,7 @@ import path from 'path';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: '/api/:path*',
-      },
-    ];
-  },
+  // Eliminar el rewrites ya que no es necesario
   webpack: (config) => {
     config.resolve.alias['@'] = path.resolve('src');
     return config;

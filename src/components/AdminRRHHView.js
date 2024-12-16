@@ -4,7 +4,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/input'
-import JobTable from '@/components/JobTable'
+import JobTable from '@/components/JobTableObject'
 import SpreadsheetLink from '@/components/SpreadsheetLink'
 import AdminPageBase from '@/components/AdminPageBase'
 import { sheetIds } from '@/config/roles'
@@ -12,7 +12,7 @@ import { sheetIds } from '@/config/roles'
 const fetchSheetData = async (sheet) => {
   console.log(`Fetching data for sheet: ${sheet}`);
   try {
-    const response = await fetch(`/api/fetchSheetData?sheet=${sheet}`);
+    const response = await fetch(`/api/fetchAllSheetData?sheet=${sheet}`);
     if (!response.ok) {
       throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
     }
@@ -38,17 +38,20 @@ export default function AdminRRHHView() {
   })
 
   const filteredData = useMemo(() => {
-    if (!sheetData) return []
-    let data = sheetData
+    if (!sheetData) return [];
+    let data = sheetData;
     if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
       data = data.filter(row => {
-        const rowDate = new Date(row['Fecha y Hora'])
-        return rowDate >= new Date(startDate) && rowDate <= new Date(endDate)
-      })
+        const rowDate = new Date(row['Fecha y Hora'] || row[1]);
+        return rowDate >= start && rowDate <= end;
+      });
     }
-    return data
-  }, [sheetData, startDate, endDate])
+    return data;
+  }, [sheetData, startDate, endDate]);
 
+  
   const columns = useMemo(() => {
     if (!sheetData || sheetData.length === 0) return []
     return Object.keys(sheetData[0])

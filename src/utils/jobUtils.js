@@ -1,59 +1,208 @@
 // src/utils/jobUtils.js
 import { sheetIds } from '@/config/roles';
 
-export const fetchJobs = async (timeFrame, role) => {
-  console.log(`Fetching jobs for timeFrame: ${timeFrame} and role: ${role}`);
-  if (!role) {
-    throw new Error('User role is not defined');
-  }
+export const fetchJobs = async (timeFrame, type, companyFilter = null) => {
+  console.log('Fetching jobs:', { timeFrame, type, companyFilter });
+  
   try {
-    const url = `/api/sheets?role=${role}&timeFrame=${timeFrame}`;
-    console.log(`Sending request to: ${url}`);
-    const response = await fetch(url);
-    console.log(`Received response with status: ${response.status}`);
+    const params = new URLSearchParams();
+    
+    if (timeFrame === 'unassigned') {
+      params.append('type', 'unassigned');
+    }
+    
+    if (companyFilter && companyFilter !== 'todos') {
+      params.append('companyFilter', companyFilter);
+    }
+    
+    let endpoint;
+    if (type === 'workerDispatch') {
+      endpoint = `/api/sheets/dispatch?${params.toString()}`;
+    } else if (type === 'workerQuality') {
+      endpoint = `/api/quality?${params.toString()}`;
+    } else {
+      params.append('role', type);
+      endpoint = `/api/sheets?${params.toString()}`;
+    }
+    
+    console.log('Requesting from endpoint:', endpoint);
+    
+    const response = await fetch(endpoint);
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || `Failed to fetch jobs for ${timeFrame}`);
+      console.error('Error response:', response.status, response.statusText);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    
     const data = await response.json();
-    console.log(`Fetched jobs for ${timeFrame}:`, data);
-    if (!Array.isArray(data)) {
-      throw new Error(`Invalid data format received for ${timeFrame}`);
-    }
+    console.log('Data received:', {
+      endpoint,
+      rowCount: data?.length,
+      sampleRow: data?.[1] // Primera fila después del encabezado
+    });
+    
     return data;
   } catch (error) {
-    console.error(`Error fetching jobs for ${timeFrame}:`, error);
+    console.error('Error fetching jobs:', error);
+    return [];
+  }
+};
+
+export const logChange = async (jobNumber, action, timestamp, userRole) => {
+  console.log('Iniciando logChange:', { jobNumber, action, timestamp, userRole });
+  
+  try {
+    const response = await fetch('/api/sheets', {  // Cambiar a la ruta correcta
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        jobNumber,
+        action,
+        timestamp: timestamp || new Date().toISOString(),
+        userRole,
+        type: 'log'  // Agregar tipo para diferenciar la acción
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Error en logChange:', response.status, response.statusText);
+      throw new Error('Failed to log change');
+    }
+    
+    const data = await response.json();
+    console.log('Cambio registrado:', data);
+    return data;
+  } catch (error) {
+    console.error('Error logging change:', error);
     throw error;
   }
 };
 
-export const addJob = async (jobNumber, userEmail, userRole, activePage) => {
-  console.log(`Adding job for user: ${userEmail} on page: ${activePage}, role: ${userRole}`);
-  const timestamp = new Date().toISOString();
-  try {
-    const status = getStatusFromPage(activePage);
-    const body = {
-      role: userRole,
-      activePage,
-      jobNumber: jobNumber.trim(),
-      timestamp,
-      userEmail,
-      status
-    };
 
+export async function onDelete(jobNumber, timestamp, role, userEmail) {
+  try {
+    // Ruta especial para Commerce
+    if (role === 'workerCommerce') {
+      const response = await fetch('/api/jobs/commerce/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jobNumber,
+          timestamp,
+          userEmail
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(`Error al eliminar: ${data.error || 'Error desconocido'}`);
+      }
+
+      return await response.json();
+    }
+
+    // Ruta especial para Dispatch
+    if (role === 'workerDispatch') {
+      const response = await fetch('/api/sheets/dispatch/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jobNumber,
+          timestamp,
+          userEmail
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(`Error al eliminar: ${data.error || 'Error desconocido'}`);
+      }
+
+      return await response.json();
+    }
+
+    // Mantener la lógica existente para los demás roles
+    const response = await fetch('/api/jobs/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        jobNumber,
+        timestamp,
+        role,
+        userEmail
+      }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(`Error al eliminar: ${data.error || 'Error desconocido'}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error en onDelete:', error);
+    throw error;
+  }
+}
+
+
+export const onEdit = async (jobNumber, updatedData) => {
+  if (!jobNumber) {
+    throw new Error('Invalid job number');
+  }
+  console.log(`Editing job: ${jobNumber}`);
+  try {
+    const response = await fetch(`/api/jobs/${jobNumber}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to edit job');
+    }
+
+    const data = await response.json();
+    console.log('Job edited successfully:', data);
+    return data;
+  } catch (error) {
+    console.error('Error editing job:', error);
+    throw error;
+  }
+};
+
+export const addJob = async (jobNumber, userEmail, role, activePage, status) => {
+  console.log(`Adding job for user: ${userEmail} on page: ${activePage}, role: ${role}`);
+  
+  try {
     const response = await fetch('/api/sheets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        jobNumber: jobNumber.trim(),
+        timestamp: new Date().toISOString(),
+        userEmail,
+        role,        // Para determinar sheetId del área
+        activePage,  // Para getStatusFromPage si no hay status
+        status      // Status explícito si existe
+      }),
     });
-    console.log(`Received response with status: ${response.status}`);
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to add job');
     }
+
     const data = await response.json();
     console.log('Added new job:', data.newJob);
-
     return data.newJob;
   } catch (error) {
     console.error('Error adding job:', error);
@@ -61,120 +210,126 @@ export const addJob = async (jobNumber, userEmail, userRole, activePage) => {
   }
 };
 
-
 export const addDispatchJob = async (jobData, userEmail) => {
-  console.log(`Adding dispatch job for user: ${userEmail}`);
-  const timestamp = new Date().toISOString();
+  if (!sheetIds.workerDispatch) {
+    throw new Error('Missing dispatch spreadsheet configuration');
+  }
+
   try {
-    const status = getStatusFromPage('dispatch');
-    const body = {
-      activePage: 'dispatch',
+    // Estructuramos los datos en el orden correcto para las columnas
+    const dataToSend = {
       jobNumber: jobData.jobNumber,
-      timestamp: timestamp,
+      timestamp: new Date().toISOString(),
+      company: jobData.company || 'Sin Asignar', // Columna C: Empresa
+      client: jobData.client || '',
+      invoice: jobData.invoiceNumber || '',
+      shippingCompany: jobData.shippingCompany || '',
+      shippingOrder: jobData.shippingOrder || '',
       userEmail: userEmail,
-      status: status,
-      company: jobData.company,
-      ...(jobData.company === 'trento' 
-        ? { agreement: jobData.agreement }
-        : { 
-            client: jobData.client,
-            invoiceNumber: jobData.invoiceNumber,
-            shippingCompany: jobData.shippingCompany,
-            shippingOrder: jobData.shippingOrder
-          })
+      status: jobData.status || 'En despacho',
+      spreadsheetId: sheetIds.workerDispatch
     };
+
+    console.log('Enviando datos a dispatch:', dataToSend);
 
     const response = await fetch('/api/sheets/dispatch', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(dataToSend),
     });
+
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to add dispatch job');
+      throw new Error(errorData.error || 'Error al agregar el trabajo');
     }
-    const data = await response.json();
-    console.log('Added new dispatch job:', data.newJob);
-    return data.newJob;
+
+    return await response.json();
   } catch (error) {
-    console.error('Error adding dispatch job:', error);
+    console.error('Error en addDispatchJob:', error);
     throw error;
   }
 };
-
-
 
 export const fetchJobStatus = async (jobNumber) => {
   console.log(`Fetching status for job: ${jobNumber}`);
+  
   try {
-    const url = `/api/sheets?role=status&jobNumber=${jobNumber}`;
-    console.log(`Sending request to: ${url}`);
-    const response = await fetch(url);
-    console.log(`Received response with status: ${response.status}`);
+    const response = await fetch(`/api/status?jobNumber=${jobNumber}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || `Failed to fetch status for job ${jobNumber}`);
+      console.error('Error response:', errorData);
+      throw new Error(errorData.error || 'Error al obtener el estado del trabajo');
     }
+
     const data = await response.json();
-    console.log(`Fetched status for job ${jobNumber}:`, data);
-    if (!Array.isArray(data)) {
-      throw new Error(`Invalid data format received for job ${jobNumber}`);
-    }
+    console.log(`Processed ${data.length} records for job ${jobNumber}`);
+    
     return data;
   } catch (error) {
-    console.error(`Error fetching status for job ${jobNumber}:`, error);
+    console.error('Error fetching job status:', error);
     throw error;
   }
 };
 
-export const addJobAR = async (jobData, userEmail, userRole, activePage) => {
-  console.log(`Adding AR job for user: ${userEmail} on page: ${activePage}`);
-  const timestamp = new Date().toISOString();
-  try {
-    const status = getStatusFromPage(activePage);
-    const body = {
-      role: userRole,
-      activePage,
-      jobNumber: jobData.jobNumber.trim(),
-      crystalType: jobData.crystalType,
-      timestamp,
-      userEmail,
-      status
-    };
-
-    const response = await fetch('/api/sheets/ar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    console.log(`Received response with status: ${response.status}`);
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to add AR job');
-    }
-    const data = await response.json();
-    console.log('Added new AR job:', data.newJob);
-
-    return data.newJob;
-  } catch (error) {
-    console.error('Error adding AR job:', error);
-    throw error;
+export const getStatusFromPage = (activePage, selectedStatus = null) => {
+  // Si hay un estado seleccionado por el usuario, lo usamos
+  if (selectedStatus && selectedStatus.area && selectedStatus.option) {
+    return `${selectedStatus.area} - ${selectedStatus.option}`;
   }
-};
 
-export const getStatusFromPage = (activePage) => {
+  // Si no hay estado seleccionado, usamos el mapeo anterior como fallback
   const statusMap = {
     warehouse: 'Fuera de Bodega',
-    commerce: 'Fuera de Comercial',
+    commerce: 'Digitacion',
     quality: 'Fuera de Control de Calidad',
     labs: 'Fuera de Laboratorio',
     labsMineral: 'Fuera de Laboratorio Mineral',
     montage: 'Fuera de Montaje',
     dispatch: 'Despachado'
   };
+  
   return statusMap[activePage] || 'Estado Desconocido';
 };
 
+export const addJobAR = async (jobData, userEmail, userRole, activePage) => {
+  try {
+    if (typeof jobData.status !== 'string') {
+      throw new Error('El estado debe ser un string');
+    }
+
+    const response = await fetch('/api/sheets/ar', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        jobNumber: jobData.jobNumber,
+        status: jobData.status,
+        userEmail,
+        role: userRole,
+        activePage,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Error al agregar el trabajo');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error en addJobAR:', error);
+    throw error;
+  }
+};
 
 export const addQualityJob = async (jobData, userEmail) => {
   console.log(`Adding quality job for user: ${userEmail}`);
@@ -209,26 +364,50 @@ export const addQualityJob = async (jobData, userEmail) => {
   }
 };
 
+export const fetchQualityJobs = async (sheet) => {
+  if (!sheet) {
+    throw new Error('Sheet parameter is required');
+  }
 
-export const fetchQualityJobs = async (timeFrame, sheet) => {
-  console.log(`Fetching quality jobs for timeFrame: ${timeFrame} and sheet: ${sheet}`);
   try {
-    const url = `/api/quality?sheet=${sheet}&timeFrame=${timeFrame}`;
-    console.log(`Sending request to: ${url}`);
-    const response = await fetch(url);
-    console.log(`Received response with status: ${response.status}`);
+    const response = await fetch(`/api/quality?sheet=${sheet}`);
+    
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || `Failed to fetch quality jobs for ${timeFrame}`);
+      console.error('Server response error:', errorData);
+      throw new Error(errorData.error || 'Error al cargar trabajos');
     }
-    const data = await response.json();
-    console.log(`Fetched quality jobs for ${timeFrame}:`, data);
-    if (!Array.isArray(data)) {
-      throw new Error(`Invalid data format received for ${timeFrame}`);
-    }
-    return data;
+    
+    return await response.json();
   } catch (error) {
-    console.error(`Error fetching quality jobs for ${timeFrame}:`, error);
+    console.error('Error fetching quality jobs:', error);
     throw error;
+  }
+}
+
+export const fetchDelayedJobs = async () => {
+  try {
+    const response = await fetch('/api/delayed-jobs', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Error al obtener los trabajos atrasados');
+    }
+
+    const data = await response.json();
+    
+    // Los datos ya vienen formateados desde la API
+    console.log(`Recibidos ${data.length} trabajos atrasados`);
+    
+    return data;
+
+  } catch (error) {
+    console.error('Error en fetchDelayedJobs:', error);
+    throw new Error(`No se pudieron cargar los trabajos atrasados: ${error.message}`);
   }
 };

@@ -8,7 +8,7 @@ const DriveFolderLink = ({ href }) => {
         href={href} 
         target="_blank" 
         rel="noopener noreferrer"
-        className="bg-gray-800 hover:bg-green-700 text-white-500 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+        className="bg-gray-100 hover:bg-green-700 text-gray-800 hover:text-white hover:no-underline px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
       >
         Ver carpeta de archivos
       </Link>
