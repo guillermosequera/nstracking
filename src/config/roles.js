@@ -15,7 +15,10 @@ export const roles = {
                     ],
     workerCommerce: [
                       'ejecutivo4@italoptic.cl', 
-                      
+                      'ejecutivo1@italoptic.cl',
+                      'ejecutivo1@italoptic.cl',
+                      'of.centro@italoptic.cl',
+                      'coordinadorcomercial@opticatrento.cl',
                       'ejecutivo3@italoptic.cl', 
                       'contacto@italoptic.cl', 
                       'ejecutivo2@italoptic.cl',
