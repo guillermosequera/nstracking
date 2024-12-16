@@ -14,7 +14,7 @@ import JobTable from './JobTable'
 import TimeFrameSelector from './TimeFrameSelector'
 import { sheetIds } from '@/config/roles'
 import JobNumberInput from './JobNumberInput'
-import { useTheme } from 'next-themes'
+//import { useTheme } from 'next-themes'
 import { jobQueue } from '@/utils/jobQueue'
 
 const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerMontage}/edit#gid=0`
@@ -33,7 +33,7 @@ const statusFilterOptions = [
 ]
 
 export default function WorkerMontageView() {
-  const { theme } = useTheme();
+  
   const [jobNumber, setJobNumber] = useState('')
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all')
@@ -137,7 +137,7 @@ export default function WorkerMontageView() {
             className={`transition-all shadow-xl duration-200 ${
               selectedStatusFilter === value 
                 ? "bg-blue-800" 
-                : theme === 'dark' ? "bg-slate-700" : "bg-slate-200"
+                : "bg-slate-200"
             }`}
           >
             {label}

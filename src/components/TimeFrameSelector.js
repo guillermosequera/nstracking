@@ -1,7 +1,7 @@
 // src/components/TimeFrameSelector.js
 import React, { useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
-import { useTheme } from 'next-themes';
+//import { useTheme } from 'next-themes';
 
 const timeFrames = [
   { key: 'today', label: 'Hoy' },
@@ -92,7 +92,7 @@ export function useTimeFrameData(data, activeTimeFrame) {
 }
 
 export default function TimeFrameSelector({ activeTimeFrame, setActiveTimeFrame, data }) {
-  const { theme } = useTheme();
+  
   const filteredData = useTimeFrameData(data, activeTimeFrame);
   const totalJobs = filteredData.length;
 
@@ -107,7 +107,7 @@ export default function TimeFrameSelector({ activeTimeFrame, setActiveTimeFrame,
             className={`transition-all shadow-xl duration-200 ${
               activeTimeFrame === key 
                 ? "bg-blue-800" 
-                : theme === 'dark' ? "bg-slate-700" : "bg-slate-300"
+                : "bg-slate-300"
             }`}
           >
             {label}
@@ -115,7 +115,7 @@ export default function TimeFrameSelector({ activeTimeFrame, setActiveTimeFrame,
         ))}
       </div>
       <div className={`text-center text-sm ${
-        theme === 'dark' ? "text-slate-400" : "text-slate-600"
+        "text-slate-600"
       }`}>
         Total de trabajos: {totalJobs}
       </div>

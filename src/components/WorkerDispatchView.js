@@ -15,7 +15,7 @@ import JobTable from './JobTable'
 import TimeFrameSelector from './TimeFrameSelector'
 import { sheetIds } from '@/config/roles'
 import JobNumberInput from './JobNumberInput'
-import { useTheme } from 'next-themes'
+//import { useTheme } from 'next-themes'
 import { jobQueue } from '@/utils/jobQueue'
 import dispatchOptions from '@/data/dispatchOptions.json'
 import Legend from '@/components/Legend'
@@ -54,7 +54,7 @@ const LEGENDS = [
 ]
 
 export default function WorkerDispatchView() {
-  const { theme } = useTheme()
+  
   const [jobNumber, setJobNumber] = useState('')
   const [company, setCompany] = useState('')
   const [client, setClient] = useState('')

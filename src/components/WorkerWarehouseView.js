@@ -13,7 +13,7 @@ import JobTable from './JobTable'
 import TimeFrameSelector from './TimeFrameSelector'
 import { sheetIds } from '@/config/roles'
 import JobNumberInput from './JobNumberInput'
-import { useTheme } from 'next-themes'
+//import { useTheme } from 'next-themes'
 import { jobQueue } from '@/utils/jobQueue'
 
 const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerWareHouse}/edit?gid=0#gid=0`
@@ -34,7 +34,7 @@ const statusFilterOptions = [
 ]
 
 export default function WorkerWarehouseView() {
-  const { theme } = useTheme();
+  
   const [jobNumber, setJobNumber] = useState('')
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all')
