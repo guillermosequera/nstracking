@@ -40,7 +40,7 @@ const JobNumberInput = ({
       // Guardar referencia al nuevo timeout
       submitTimeoutRef.current = setTimeout(() => {
         submitJob(value);
-      }, 300);
+      }, 800);
     }
   };
 
