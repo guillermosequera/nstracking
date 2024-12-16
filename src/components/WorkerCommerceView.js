@@ -13,7 +13,7 @@ import SpreadsheetLink from './SpreadsheetLink'
 import DriveFolderLink from './DriveFolderLink'
 import CommerceJobTable from './CommerceJobTable'
 import TimeFrameSelector from './TimeFrameSelector'
-import { useTimeFrameFilter } from './TimeFrameSelector'
+import { useTimeFrameData } from './TimeFrameSelector'
 import { sheetIds } from '@/config/roles'
 import { getUserRole } from '@/config/roles'
 
@@ -51,7 +51,7 @@ export default function WorkerCommerceView() {
     refetchInterval: 30000
   })
 
-  const filteredJobs = useTimeFrameFilter(allJobs || [], activeTimeFrame)
+  const filteredJobs = useTimeFrameData(allJobs || [], activeTimeFrame)
     .filter((job, index) => {
       if (!job || index === 0) return false;
       return true;

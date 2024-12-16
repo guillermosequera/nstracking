@@ -5,6 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
 import { useDelayedJobs } from '@/hooks/useDelayedJobs'
+import LoadingState from '@/components/LoadingState'
+import ErrorState from '@/components/ErrorState'
+import EmptyState from '@/components/EmptyState'
 
 const ITEMS_PER_PAGE = 100
 
@@ -170,25 +173,4 @@ export default function DelayedJobsList() {
       )}
     </div>
   )
-}
-
-const LoadingState = () => (
-  <div className="container mx-auto p-4 max-w-4xl">
-    <h1 className="text-2xl font-bold mb-4 text-gray-100">Trabajos Atrasados</h1>
-    <div className="text-blue-500">Cargando trabajos...</div>
-  </div>
-)
-
-const ErrorState = ({ error }) => (
-  <div className="container mx-auto p-4 max-w-4xl">
-    <h1 className="text-2xl font-bold mb-4 text-gray-100">Trabajos Atrasados</h1>
-    <div className="text-red-500">Error al cargar los trabajos: {error.message}</div>
-  </div>
-)
-
-const EmptyState = () => (
-  <div className="container mx-auto p-4 max-w-4xl">
-    <h1 className="text-2xl font-bold mb-4 text-gray-100">Trabajos Atrasados</h1>
-    <div className="text-gray-300">No hay trabajos atrasados</div>
-  </div>
-) 
+} 

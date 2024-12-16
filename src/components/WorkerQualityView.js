@@ -7,7 +7,7 @@ import { useJobErrors } from '@/hooks/useJobErrors'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/Button'
 import { useSession } from 'next-auth/react'
-import { useTimeFrameFilter } from './TimeFrameSelector'
+import { useTimeFrameData } from './TimeFrameSelector'
 import SpreadsheetLink from './SpreadsheetLink'
 import JobTable from './JobTable'
 import JobNumberInput from './JobNumberInput'
@@ -50,7 +50,7 @@ export default function WorkerQualityView() {
     refetchInterval: 30000
   })
 
-  const filteredJobs = useTimeFrameFilter(allJobs || [], activeTimeFrame)
+  const filteredJobs = useTimeFrameData(allJobs || [], activeTimeFrame)
     .filter((job, index) => {
       if (!job || index === 0) return false;
       

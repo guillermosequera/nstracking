@@ -9,7 +9,7 @@ import JobNumberInput from './JobNumberInput'
 import SpreadsheetLink from './SpreadsheetLink'
 import JobTable from './JobTable'
 import TimeFrameSelector from './TimeFrameSelector'
-import { useTimeFrameFilter } from './TimeFrameSelector'
+import { useTimeFrameData } from './TimeFrameSelector'
 import { sheetIds } from '@/config/roles'
 
 const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerLabsMineral}/edit?gid=0#gid=0`
@@ -46,7 +46,7 @@ export default function WorkerLabsMineralView() {
     refetchInterval: 30000
   })
 
-  const filteredJobs = useTimeFrameFilter(allJobs || [], activeTimeFrame)
+  const filteredJobs = useTimeFrameData(allJobs || [], activeTimeFrame)
     .filter((job, index) => {
       if (!job || index === 0) return false;
       
