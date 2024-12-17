@@ -6,6 +6,7 @@ class JobQueue {
     this.processing = false;
     this.dbReady = false;
     this.initDB();
+    this.eventListeners = new Map();
   }
 
   async initDB() {
@@ -71,7 +72,8 @@ class JobQueue {
       };
 
       await this.db.add('pendingJobs', jobToStore);
-
+      this.emitEvent('jobAdded', { jobNumber: jobData.jobNumber });
+      
       if (!this.processing) {
         this.processQueue();
       }
@@ -93,6 +95,7 @@ class JobQueue {
         if (pendingJobs.length === 0) break;
 
         const job = pendingJobs[0];
+        this.emitEvent('jobProcessing', { jobNumber: job.jobNumber });
         
         try {
           // Si es un trabajo de despacho, usar addDispatchJob
@@ -110,6 +113,7 @@ class JobQueue {
           }
           
           await this.db.delete('pendingJobs', job.id);
+          this.emitEvent('jobCompleted', { jobNumber: job.jobNumber });
         } catch (error) {
           console.error('Error procesando trabajo:', error);
           await this.db.delete('pendingJobs', job.id);
@@ -117,6 +121,10 @@ class JobQueue {
             ...job,
             error: error.message,
             failedAt: new Date().toISOString()
+          });
+          this.emitEvent('jobFailed', { 
+            jobNumber: job.jobNumber, 
+            error: error.message 
           });
         }
 
@@ -133,6 +141,26 @@ class JobQueue {
     for (const job of failedJobs) {
       await this.db.delete('failedJobs', job.id);
       await this.add(job);
+    }
+  }
+
+  // Agregar métodos para el sistema de eventos
+  addEventListener(event, callback) {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, new Set());
+    }
+    this.eventListeners.get(event).add(callback);
+  }
+
+  removeEventListener(event, callback) {
+    if (this.eventListeners.has(event)) {
+      this.eventListeners.get(event).delete(callback);
+    }
+  }
+
+  emitEvent(event, data) {
+    if (this.eventListeners.has(event)) {
+      this.eventListeners.get(event).forEach(callback => callback(data));
     }
   }
 }

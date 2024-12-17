@@ -1,6 +1,7 @@
 // src/components/JobNumberInput.js
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import StatusSelector from './StatusSelector';
+import { jobQueue } from '@/utils/jobQueue';
 
 const JobNumberInput = ({ 
   jobNumber, 
@@ -12,6 +13,7 @@ const JobNumberInput = ({
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitTimeoutRef = useRef(null); // Para manejar el timeout
+  const [feedback, setFeedback] = useState({ show: false, message: '', type: '' });
 
   const submitJob = useCallback(async (value) => {
     if (isSubmitting) return;
@@ -69,14 +71,42 @@ const JobNumberInput = ({
     setSelectedStatus(status);
   };
 
+  useEffect(() => {
+    const handleJobAdded = (data) => {
+      setFeedback({
+        show: true,
+        message: `Trabajo ${data.jobNumber} agregado correctamente`,
+        type: 'success'
+      });
+      setTimeout(() => setFeedback({ show: false, message: '', type: '' }), 3000);
+    };
+
+    const handleJobFailed = (data) => {
+      setFeedback({
+        show: true,
+        message: `Error al procesar trabajo ${data.jobNumber}`,
+        type: 'error'
+      });
+      setTimeout(() => setFeedback({ show: false, message: '', type: '' }), 3000);
+    };
+
+    jobQueue.addEventListener('jobAdded', handleJobAdded);
+    jobQueue.addEventListener('jobFailed', handleJobFailed);
+
+    return () => {
+      jobQueue.removeEventListener('jobAdded', handleJobAdded);
+      jobQueue.removeEventListener('jobFailed', handleJobFailed);
+    };
+  }, []);
+
   return (
     <div className="space-y-6">
       {!hideStatusSelector && (
         <StatusSelector onStatusSelect={handleStatusSelect} />
       )}
       
-      <form onSubmit={handleSubmit} className="flex justify-center">
-        <div className="flex items-center w-full max-w-md shadow-md">
+      <form onSubmit={handleSubmit} className="flex justify-center items-center gap-2">
+        <div className="flex items-center w-full max-w-md shadow-md relative">
           <input
             type="text"
             value={jobNumber}
@@ -96,6 +126,19 @@ const JobNumberInput = ({
             {isLoading || isSubmitting ? 'Enviando...' : 'Enviar'}
           </button>
         </div>
+        
+        {/* Feedback mensaje al lado del input */}
+        {feedback.show && (
+          <div className={`absolute left-[calc(50%+250px)] px-4 py-2 rounded-md text-xs 
+            transition-all duration-300 transform translate-y-0
+            ${feedback.type === 'success' 
+              ? 'bg-green-800 text-green-100' 
+              : 'bg-red-800 text-red-100'
+            }`}
+          >
+            {feedback.message}
+          </div>
+        )}
       </form>
     </div>
   );
