@@ -15,11 +15,11 @@ const areas = [
   },
   {
     name: "Laboratorio",
-    options: ["Superficie polimeros", "Superficie mineral", "Tratamiento", "Tratamiento AR", "Teñido", "Reparacion", "Rectificacion"]
+    options: ["Superficie polimeros", "Superficie mineral", "Tratamiento", "Tratamiento AR", "Teñido", "Reparacion mineral"]
   },
   {
     name: "Merma",
-    options: ["Merma antireflejo", "Merma laboratorio", "Merma teñido", "Merma Montaje", "Merma bodega", "Merma comercial", "Merma material", "Merma proveedor"]
+    options: ["Merma antireflejo", "Merma laboratorio", "Merma teñido", "Merma Montaje", "Merma bodega", "Merma comercial", "Merma material", "Merma proveedor", "Merma sistema"]
   },
   {
     name: "Montaje",
