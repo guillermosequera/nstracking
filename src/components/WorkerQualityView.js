@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchQualityJobs, addQualityJob } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
@@ -14,12 +14,13 @@ import JobNumberInput from './JobNumberInput'
 import StatusSelector from './StatusSelector'
 import TimeFrameSelector from './TimeFrameSelector'
 import { sheetIds } from '@/config/roles'
+import { jobQueue } from '@/utils/jobQueue'
 
 const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerQuality}/edit?gid=0#gid=0`
 
 const COLUMNS = [
   { key: 'jobNumber', header: 'N° Orden' },
-  { key: 'timestamp', header: 'Fecha y Hora' },
+  { key: 'timestampFormatted', header: 'Fecha y Hora' },
   { key: 'status', header: 'Estado' },
   { key: 'user', header: 'Responsable' },
   { key: 'notes', header: 'Notas' }
@@ -36,81 +37,124 @@ export default function WorkerQualityView() {
   const [jobNumber, setJobNumber] = useState('')
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all')
+  const [queueStatus, setQueueStatus] = useState({ pending: 0, failed: 0 });
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
   const { data: session } = useSession()
 
-  const { data: allJobs = [], isLoading } = useQuery({
+  const { data: allJobs = [], isLoading, refetch } = useQuery({
     queryKey: ['quality-jobs', activeTimeFrame],
-    queryFn: () => fetchQualityJobs('quality'), // Siempre traemos de la hoja principal
+    queryFn: () => fetchQualityJobs('quality'),
     retry: 3,
     onError: handleError,
-    enabled: !!session?.user?.email,
-    refetchInterval: 30000
+    enabled: !!session?.user?.email
   })
 
-  const filteredJobs = useTimeFrameData(allJobs || [], activeTimeFrame)
-    .filter((job, index) => {
-      if (!job || index === 0) return false;
-      
-      // Extraemos área y opción del estado
-      const [area, option] = job[3].split(' - ');
-      
-      switch(selectedStatusFilter) {
-        case 'all':
-          return true;
-        case 'control':
-          return area === 'Control Calidad' && option !== 'Garantia';
-        case 'garantia':
-          return area === 'Control Calidad' && option === 'Garantia';
-        case 'Merma':
-          return area === 'Merma';
-        default:
-          return true;
-      }
-    })
-    .map((job) => ({
-      jobNumber: job[0],
-      timestamp: new Date(job[1]).toLocaleString('es-ES', {
-        dateStyle: 'medium',
-        timeStyle: 'medium'
-      }),
-      status: job[2],
-      user: job[3],
-      notes: job[4]
-    }))
+  const timeFilteredJobs = useTimeFrameData(allJobs || [], activeTimeFrame);
 
-  const addJobMutation = useMutation({
-    mutationFn: (jobData) => addQualityJob(jobData, session?.user?.email),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['quality-jobs'])
-      setJobNumber('')
-      clearError()
-    },
-    onError: handleError
-  })
+  const filteredJobs = useMemo(() => {
+    return timeFilteredJobs
+      .filter(job => {
+        if (!job) return false;
+        const [area, option] = job[3].split(' - ');
+        
+        switch(selectedStatusFilter) {
+          case 'all': return true;
+          case 'control': return area === 'Control Calidad' && option !== 'Garantia';
+          case 'garantia': return area === 'Control Calidad' && option === 'Garantia';
+          case 'Merma': return area === 'Merma';
+          default: return true;
+        }
+      })
+      .map(job => ({
+        jobNumber: job[0],
+        timestamp: job[1],
+        timestampFormatted: new Date(job[1]).toLocaleString('es-ES', {
+          dateStyle: 'medium',
+          timeStyle: 'medium'
+        }),
+        status: job[2],
+        user: job[3],
+        notes: job[4]
+      }));
+  }, [timeFilteredJobs, selectedStatusFilter]);
 
   const handleSubmit = useCallback((jobNumberValue, status) => {
-    const formattedStatus = `${status.area} - ${status.option}`;
+    if (!status) return;
     
-    addJobMutation.mutate({ 
+    const formattedStatus = `${status.area} - ${status.option}`;
+    const now = new Date();
+    const timestamp = now.toISOString();
+    
+    jobQueue.add({
       jobNumber: jobNumberValue,
+      userEmail: session?.user?.email,
+      role: 'workerQuality',
+      activePage: 'quality',
       status: formattedStatus,
+      timestamp,
       notes: status.comment || ''
-    })
-  }, [addJobMutation])
+    });
+
+    queryClient.setQueryData(['quality-jobs'], (old) => {
+      const newRow = [
+        jobNumberValue, 
+        timestamp, 
+        formattedStatus, 
+        session?.user?.email,
+        status.comment || ''
+      ];
+      
+      if (!old || !Array.isArray(old) || old.length === 0) {
+        return [['jobNumber', 'timestamp', 'status', 'user', 'notes'], newRow];
+      }
+      
+      const [headers, ...rows] = old;
+      return [headers, newRow, ...rows];
+    });
+    
+    refetch();
+    setJobNumber('');
+    clearError();
+  }, [session?.user?.email, queryClient, refetch, clearError]);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const status = jobQueue.getStatus();
+      setQueueStatus(status);
+      
+      if (status.pending === 0) {
+        refetch();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [refetch]);
 
   if (isLoading) return <div className="text-center text-gray-300">Cargando trabajos...</div>
 
   return (
     <div className="space-y-6 pb-16">
-      <JobNumberInput
-        jobNumber={jobNumber}
-        setJobNumber={setJobNumber}
-        isLoading={addJobMutation.isLoading}
-        onSubmit={handleSubmit}
-      />
+      <div className="space-y-4 bg-gray-200 p-4 rounded-lg">
+        <JobNumberInput
+          jobNumber={jobNumber}
+          setJobNumber={setJobNumber}
+          isLoading={false}
+          onSubmit={handleSubmit}
+          hideStatusSelector={false}
+        />
+      </div>
 
       {error && (
         <Alert variant="destructive" className="bg-red-900 border-red-700 text-red-100">
@@ -124,7 +168,7 @@ export default function WorkerQualityView() {
             key={value}
             onClick={() => setSelectedStatusFilter(value)}
             variant={selectedStatusFilter === value ? "default" : "outline"}
-            className={selectedStatusFilter === value ? "bg-blue-800" : "bg-gray-700"}
+            className={selectedStatusFilter === value ? "bg-blue-800" : "bg-gray-300 shadow-xl"}
           >
             {label}
           </Button>
@@ -137,14 +181,37 @@ export default function WorkerQualityView() {
         data={allJobs}
       />
 
+      {queueStatus.pending > 0 && (
+        <Alert>
+          <AlertDescription>
+            {queueStatus.pending} trabajos pendientes de sincronizar
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {queueStatus.failed > 0 && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {queueStatus.failed} trabajos fallidos
+            <Button onClick={() => jobQueue.retryFailedJobs()}>
+              Reintentar
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <JobTable 
-        title={`Trabajos de Control de Calidad`}
+        title="Trabajos de Control de Calidad"
         jobs={filteredJobs}
         columns={COLUMNS}
         timeFrame={activeTimeFrame}
         enableScroll={true}
         role="workerQuality"
         onError={handleError}
+        onRefresh={handleRefresh}
+        isLoading={isLoading || isRefreshing}
+        pendingJobs={queueStatus.pending}
+        spreadsheetId={sheetIds.workerQuality}
       />
 
       <SpreadsheetLink href={SPREADSHEET_URL} />

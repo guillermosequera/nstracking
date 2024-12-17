@@ -92,24 +92,28 @@ export default function JobTable({
     container.scrollLeft = scrollLeft - walk
   }
 
+  const RefreshButton = useMemo(() => (
+    <Button
+      onClick={onRefresh}
+      variant="outline"
+      size="sm"
+      disabled={isLoading}
+      className="ml-2 flex items-center gap-2 shadow-xl"
+    >
+      <RefreshCw 
+        className={`h-4 w-4 transition-transform duration-700 ease-in-out ${
+          isLoading ? 'animate-spin' : ''
+        }`}
+      />
+      <span>{isLoading ? 'Actualizando...' : 'Actualizar'}</span>
+    </Button>
+  ), [isLoading, onRefresh]);
+
   const TableContent = (
     <div className="overflow-hidden shadow-xl">
       <div className="flex justify-between items-center mb-4 px-6">
         <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        {onRefresh && (
-          <Button
-            onClick={onRefresh}
-            variant="outline"
-            size="sm"
-            disabled={isLoading}
-            className="ml-2 flex items-center gap-2 shadow-xl"
-          >
-            <RefreshCw 
-              className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} 
-            />
-            {isLoading ? 'Actualizando...' : 'Actualizar'}
-          </Button>
-        )}
+        {onRefresh && RefreshButton}
       </div>
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-slate-500">

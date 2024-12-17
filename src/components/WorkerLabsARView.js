@@ -19,7 +19,7 @@ import { jobQueue } from '@/utils/jobQueue'
 const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerLabsAR}/edit?gid=0#gid=0`
 const COLUMNS = [
   { key: 'jobNumber', header: 'N° Orden' },
-  { key: 'timestamp', header: 'Fecha y Hora' },
+  { key: 'timestampFormatted', header: 'Fecha y Hora' },
   { key: 'status', header: 'Estado' },
   { key: 'user', header: 'Usuario' }
 ]
@@ -36,6 +36,7 @@ export default function WorkerLabsARView() {
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all')
   const [queueStatus, setQueueStatus] = useState({ pending: 0, failed: 0 });
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
@@ -55,8 +56,14 @@ export default function WorkerLabsARView() {
     return timeFilteredJobs
       .filter(job => {
         if (!job) return false;
-        const [area] = (job[2] || '').split(' - ');
-        return selectedStatusFilter === 'all' || area === selectedStatusFilter;
+        const [area, option] = (job[2] || '').split(' - ');
+        
+        switch(selectedStatusFilter) {
+          case 'all': return true;
+          case 'AR': return area === 'AR';
+          case 'Merma': return area === 'Merma';
+          default: return true;
+        }
       })
       .map(job => ({
         jobNumber: job[0],
@@ -102,6 +109,15 @@ export default function WorkerLabsARView() {
     clearError();
   }, [session?.user?.email, queryClient, refetch, clearError]);
 
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       const status = jobQueue.getStatus();
@@ -121,8 +137,9 @@ export default function WorkerLabsARView() {
         <JobNumberInput 
           jobNumber={jobNumber}
           setJobNumber={setJobNumber}
-          isLoading={isLoading}
+          isLoading={false}
           onSubmit={handleSubmit}
+          hideStatusSelector={false}
         />
       </div>
 
@@ -182,9 +199,10 @@ export default function WorkerLabsARView() {
         enableScroll={true}
         role="workerLabsAR"
         onError={handleError}
-        onRefresh={refetch}
-        isLoading={isLoading}
+        onRefresh={handleRefresh}
+        isLoading={isLoading || isRefreshing}
         pendingJobs={queueStatus.pending}
+        spreadsheetId={sheetIds.workerLabsAR}
       />
 
       <SpreadsheetLink href={SPREADSHEET_URL} />

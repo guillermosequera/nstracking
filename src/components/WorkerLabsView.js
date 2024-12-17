@@ -19,7 +19,7 @@ import { jobQueue } from '@/utils/jobQueue'
 const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerLabs}/edit?gid=0#gid=0`
 const COLUMNS = [
   { key: 'jobNumber', header: 'N° Orden' },
-  { key: 'timestamp', header: 'Fecha y Hora' },
+  { key: 'timestampFormatted', header: 'Fecha y Hora' },
   { key: 'status', header: 'Estado' },
   { key: 'user', header: 'Usuario' }
 ]
@@ -38,6 +38,7 @@ export default function WorkerLabsView() {
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all')
   const [queueStatus, setQueueStatus] = useState({ pending: 0, failed: 0 });
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
@@ -128,14 +129,24 @@ export default function WorkerLabsView() {
     return () => clearInterval(interval);
   }, [refetch]);
 
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
+
   return (
     <div className="space-y-6 pb-16">
-      <div className="space-y-4 bg-gray-200 p-4 rounded-lg shadow-xl">
+      <div className="space-y-4 bg-gray-200 p-4 rounded-lg">
         <JobNumberInput 
           jobNumber={jobNumber}
           setJobNumber={setJobNumber}
-          isLoading={isLoading}
+          isLoading={false}
           onSubmit={handleSubmit}
+          hideStatusSelector={false}
         />
       </div>
 
@@ -151,11 +162,7 @@ export default function WorkerLabsView() {
             key={value}
             onClick={() => setSelectedStatusFilter(value)}
             variant={selectedStatusFilter === value ? "default" : "outline"}
-            className={`transition-all shadow-xl duration-200 ${
-              selectedStatusFilter === value 
-                ? "bg-blue-800" 
-                : "bg-slate-200"
-            }`}
+            className={selectedStatusFilter === value ? "bg-blue-800 shadow-xl" : "bg-gray-300 shadow-xl"}
           >
             {label}
           </Button>
@@ -195,9 +202,10 @@ export default function WorkerLabsView() {
         enableScroll={true}
         role="workerLabs"
         onError={handleError}
-        onRefresh={refetch}
-        isLoading={isLoading}
+        onRefresh={handleRefresh}
+        isLoading={isLoading || isRefreshing}
         pendingJobs={queueStatus.pending}
+        spreadsheetId={sheetIds.workerLabs}
       />
 
       <SpreadsheetLink href={SPREADSHEET_URL} />

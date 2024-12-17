@@ -38,6 +38,7 @@ export default function WorkerMontageView() {
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all')
   const [queueStatus, setQueueStatus] = useState({ pending: 0, failed: 0 });
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const queryClient = useQueryClient()
   const { handleError } = useJobErrors()
@@ -103,6 +104,15 @@ export default function WorkerMontageView() {
     refetch();
     setJobNumber('');
   }, [session?.user?.email, queryClient, refetch]);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -178,8 +188,8 @@ export default function WorkerMontageView() {
         enableScroll={true}
         role="workerMontage"
         onError={handleError}
-        onRefresh={refetch}
-        isLoading={isLoading}
+        onRefresh={handleRefresh}
+        isLoading={isLoading || isRefreshing}
         pendingJobs={queueStatus.pending}
       />
 

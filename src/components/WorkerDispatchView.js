@@ -63,6 +63,7 @@ export default function WorkerDispatchView() {
   const [shippingOrder, setShippingOrder] = useState('')
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState('Sin Asignar')
   const [queueStatus, setQueueStatus] = useState({ pending: 0, failed: 0 })
+  const [isRefreshing, setIsRefreshing] = useState(false)
   
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
@@ -84,12 +85,7 @@ export default function WorkerDispatchView() {
   })
 
   const filteredJobs = useMemo(() => {
-    if (!allJobs?.length) {
-      console.log('No hay trabajos disponibles');
-      return [];
-    }
-
-    console.log('Filtrando trabajos:', allJobs.length);
+    if (!allJobs?.length) return [];
 
     return allJobs
       .filter(job => {
@@ -240,13 +236,22 @@ export default function WorkerDispatchView() {
     }
   };
 
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
+
   return (
     <div className="space-y-6 pb-16">
-      <div className="space-y-4 bg-gray-200 p-4 rounded-lg">
+      <div className="space-y-4 bg-gray-200 p-4 rounded-lg shadow-xl">
         <JobNumberInput
           jobNumber={jobNumber}
           setJobNumber={setJobNumber}
-          isLoading={false}
+          isLoading={isRefreshing}
           onSubmit={handleSubmit}
           hideStatusSelector={true}
         />
@@ -272,7 +277,7 @@ export default function WorkerDispatchView() {
         <Button
           onClick={() => handleCompanyFilterChange('')}
           variant={selectedCompanyFilter === 'Sin Asignar' ? "default" : "outline"}
-          className={selectedCompanyFilter === 'Sin Asignar' ? "bg-blue-800" : ""}
+          className={selectedCompanyFilter === 'Sin Asignar' ? "bg-blue-800 shadow-xl" : "bg-gray-300 shadow-xl"}
         >
           En Despacho
         </Button>
@@ -281,7 +286,7 @@ export default function WorkerDispatchView() {
             key={value}
             onClick={() => handleCompanyFilterChange(value)}
             variant={selectedCompanyFilter === value ? "default" : "outline"}
-            className={selectedCompanyFilter === value ? "bg-blue-800" : ""}
+            className={selectedCompanyFilter === value ? "bg-blue-800 shadow-xl" : "bg-gray-300 shadow-xl"}
           >
             {label}
           </Button>
@@ -314,12 +319,10 @@ export default function WorkerDispatchView() {
         enableScroll={true}
         role="workerDispatch"
         onError={handleError}
-        onRefresh={() => {
-          console.log('Actualizando datos manualmente...');
-          refetch();
-        }}
-        isLoading={isLoading}
+        onRefresh={handleRefresh}
+        isLoading={isLoading || isRefreshing}
         pendingJobs={queueStatus.pending}
+        spreadsheetId={sheetIds.workerDispatch}
       />
 
       <Legend legends={LEGENDS} />

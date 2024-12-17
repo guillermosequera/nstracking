@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchJobs, addJob } from '@/utils/jobUtils'
 import { useJobErrors } from '@/hooks/useJobErrors'
@@ -11,6 +11,7 @@ import JobTable from './JobTable'
 import TimeFrameSelector from './TimeFrameSelector'
 import { useTimeFrameData } from './TimeFrameSelector'
 import { sheetIds } from '@/config/roles'
+import { jobQueue } from '@/utils/jobQueue'
 
 const SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${sheetIds.workerLabsMineral}/edit?gid=0#gid=0`
 const COLUMNS = [
@@ -32,12 +33,14 @@ export default function WorkerLabsMineralView() {
   const [jobNumber, setJobNumber] = useState('')
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all')
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [queueStatus, setQueueStatus] = useState({ pending: 0, failed: 0 })
   
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
   const { data: session } = useSession()
 
-  const { data: allJobs = [], isLoading } = useQuery({
+  const { data: allJobs = [], isLoading, refetch } = useQuery({
     queryKey: ['mineral-jobs', activeTimeFrame],
     queryFn: () => fetchJobs(activeTimeFrame, 'workerLabsMineral'),
     retry: 3,
@@ -46,75 +49,100 @@ export default function WorkerLabsMineralView() {
     refetchInterval: 30000
   })
 
-  const filteredJobs = useTimeFrameData(allJobs || [], activeTimeFrame)
-    .filter((job, index) => {
-      if (!job || index === 0) return false;
-      
-      // Extraemos área y opción del estado
-      const [area, option] = (job[2] || '').split(' - ');
-      
-      switch(selectedStatusFilter) {
-        case 'all':
-          return true;
-        case 'mineral':
-          return area === 'Laboratorio' && option === 'Superficie mineral';
-        case 'reparacion':
-          return area === 'Laboratorio' && option === 'Reparacion';
-        case 'rectificacion':
-          return area === 'Laboratorio' && option === 'Rectificacion';
-        case 'Merma':
-          return area === 'Merma' && (
-            option === 'Merma laboratorio'
-          );
-        default:
-          return true;
-      }
-    })
-    .map((job) => ({
-      jobNumber: job[0],
-      timestamp: new Date(job[1]).toLocaleString('es-ES', {
-        dateStyle: 'medium',
-        timeStyle: 'medium'
-      }),
-      status: job[2],
-      user: job[3]
-    }))
+  const timeFilteredJobs = useTimeFrameData(allJobs, activeTimeFrame);
 
-  const addJobMutation = useMutation({
-    mutationFn: (jobData) => addJob(
-      jobData.jobNumber,
-      session?.user?.email,
-      'workerLabsMineral',
-      'labsMineral',
-      jobData.status
-    ),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['mineral-jobs'])
-      setJobNumber('')
-      clearError()
-    },
-    onError: handleError
-  })
+  const filteredJobs = useMemo(() => {
+    return timeFilteredJobs
+      .filter((job) => {
+        if (!job) return false;
+        const [area, option] = (job[2] || '').split(' - ');
+        
+        switch(selectedStatusFilter) {
+          case 'all': return true;
+          case 'mineral': return area === 'Laboratorio' && option === 'Superficie mineral';
+          case 'reparacion': return area === 'Laboratorio' && option === 'Reparacion';
+          case 'rectificacion': return area === 'Laboratorio' && option === 'Rectificacion';
+          case 'Merma': return area === 'Merma' && option === 'Merma laboratorio';
+          default: return true;
+        }
+      })
+      .map(job => ({
+        jobNumber: job[0],
+        timestamp: job[1],
+        timestampFormatted: new Date(job[1]).toLocaleString('es-ES', {
+          dateStyle: 'medium',
+          timeStyle: 'medium'
+        }),
+        status: job[2],
+        user: job[3]
+      }));
+  }, [timeFilteredJobs, selectedStatusFilter]);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      await refetch()
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [refetch])
 
   const handleSubmit = useCallback((jobNumberValue, status) => {
-    const formattedStatus = `${status.area} - ${status.option}`;
+    if (!status) return;
     
-    addJobMutation.mutate({ 
+    const formattedStatus = `${status.area} - ${status.option}`;
+    const now = new Date();
+    const timestamp = now.toISOString();
+    
+    jobQueue.add({
       jobNumber: jobNumberValue,
-      status: formattedStatus
-    })
-  }, [addJobMutation])
+      userEmail: session?.user?.email,
+      role: 'workerLabsMineral',
+      activePage: 'labsMineral',
+      status: formattedStatus,
+      timestamp
+    });
+
+    queryClient.setQueryData(['mineral-jobs'], (old) => {
+      const newRow = [jobNumberValue, timestamp, formattedStatus, session?.user?.email];
+      
+      if (!old || !Array.isArray(old) || old.length === 0) {
+        return [['jobNumber', 'timestamp', 'status', 'user'], newRow];
+      }
+      
+      const [headers, ...rows] = old;
+      return [headers, newRow, ...rows];
+    });
+    
+    refetch();
+    setJobNumber('');
+    clearError();
+  }, [session?.user?.email, queryClient, refetch, clearError]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const status = jobQueue.getStatus();
+      setQueueStatus(status);
+      
+      if (status.pending === 0) {
+        refetch();
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [refetch]);
 
   if (isLoading) return <div className="text-center text-gray-300">Cargando trabajos...</div>
 
   return (
     <div className="space-y-6 pb-16">
-      <div className="space-y-4 bg-gray-900 p-4 rounded-lg">
+      <div className="space-y-4 bg-gray-300 p-4 rounded-lg">
         <JobNumberInput 
           jobNumber={jobNumber}
           setJobNumber={setJobNumber}
-          isLoading={addJobMutation.isLoading}
+          isLoading={false}
           onSubmit={handleSubmit}
+          hideStatusSelector={false}
         />
       </div>
 
@@ -124,13 +152,32 @@ export default function WorkerLabsMineralView() {
         </Alert>
       )}
 
+      {queueStatus.pending > 0 && (
+        <Alert>
+          <AlertDescription>
+            {queueStatus.pending} trabajos pendientes de sincronizar
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {queueStatus.failed > 0 && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {queueStatus.failed} trabajos fallidos
+            <Button onClick={() => jobQueue.retryFailedJobs()}>
+              Reintentar
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex justify-center space-x-4">
         {statusFilterOptions.map(({ value, label }) => (
           <Button
             key={value}
             onClick={() => setSelectedStatusFilter(value)}
             variant={selectedStatusFilter === value ? "default" : "outline"}
-            className={selectedStatusFilter === value ? "bg-blue-800" : "bg-gray-700"}
+            className={selectedStatusFilter === value ? "bg-blue-800" : "bg-gray-200 shadow-xl"}
           >
             {label}
           </Button>
@@ -146,11 +193,20 @@ export default function WorkerLabsMineralView() {
       <JobTable 
         title="Trabajos de Laboratorio Mineral"
         jobs={filteredJobs}
-        columns={COLUMNS}
+        columns={[
+          { key: 'jobNumber', header: 'N° Orden' },
+          { key: 'timestampFormatted', header: 'Fecha y Hora' },
+          { key: 'status', header: 'Estado' },
+          { key: 'user', header: 'Usuario' }
+        ]}
         timeFrame={activeTimeFrame}
         enableScroll={true}
         role="workerLabsMineral"
         onError={handleError}
+        onRefresh={handleRefresh}
+        isLoading={isLoading || isRefreshing}
+        pendingJobs={queueStatus.pending}
+        spreadsheetId={sheetIds.workerLabsMineral}
       />
 
       <SpreadsheetLink href={SPREADSHEET_URL} />

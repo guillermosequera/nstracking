@@ -39,6 +39,8 @@ export default function WorkerWarehouseView() {
   const [activeTimeFrame, setActiveTimeFrame] = useState('today')
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('all')
   const [queueStatus, setQueueStatus] = useState({ pending: 0, failed: 0 });
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
   
   const queryClient = useQueryClient()
   const { handleError, error, clearError } = useJobErrors()
@@ -131,6 +133,16 @@ export default function WorkerWarehouseView() {
     return () => clearInterval(interval);
   }, [refetch]);
 
+  // Crear una función handleRefresh que maneje el refetch
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
+
   return (
     <div className="space-y-6 pb-16">
       <div className="space-y-4 bg-gray-200 p-4 rounded-lg">
@@ -196,8 +208,8 @@ export default function WorkerWarehouseView() {
         enableScroll={true}
         role="workerWareHouse"
         onError={handleError}
-        onRefresh={refetch}
-        isLoading={isLoading}
+        onRefresh={handleRefresh}
+        isLoading={isLoading || isRefreshing}
         pendingJobs={queueStatus.pending}
       />
 

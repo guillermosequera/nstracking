@@ -11,7 +11,7 @@ export const roles = {
                       'bodegacentral@italoptic.cl',
                       'bodegaitaloptic@gmail.com',
                       'bodegacentraltrento@gmail.com',
-                      'tecnico.ti@italoptic.cl',
+                      'tecnico.ti@italoptic.cl'
                     ],
     workerCommerce: [
                       'ejecutivo4@italoptic.cl', 
