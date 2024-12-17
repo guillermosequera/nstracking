@@ -5,6 +5,7 @@ import { getUserRole } from '@/config/roles';
 import { Button } from '@/components/ui/Button';
 import { useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
+import DeleteButton from '@/components/DeleteButton';
 
 const TIME_FRAME_LABELS = {
   'today': 'Hoy',
@@ -142,14 +143,10 @@ export default function JobTable({
               ))}
               {role && (
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
-                  <Button
-                    onClick={() => handleDelete(job.jobNumber, job.timestamp)}
-                    variant="destructive"
-                    size="sm"
-                    className="bg-red-600 hover:bg-red-700 shadow-xl"
-                  >
-                    Eliminar
-                  </Button>
+                  <DeleteButton
+                    onDelete={() => handleDelete(job.jobNumber, job.timestamp)}
+                    itemId={job.jobNumber}
+                  />
                 </td>
               )}
             </tr>
