@@ -52,7 +52,8 @@ const LEGENDS = [
   { value: "00000003", standard: "Estuches" },
   { value: "00000004", standard: "Cheques" },
   { value: "00000005", standard: "Publicidad" },
-  { value: "00000006", standard: "Documentos" }
+  { value: "00000006", standard: "Documentos" },
+  { value: "00000007", standard: "Facturacion por lote" }
 ]
 
 export default function WorkerDispatchView() {
