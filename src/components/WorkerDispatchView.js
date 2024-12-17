@@ -42,6 +42,8 @@ const shippingCompanyOptions = [
   { value: 'chilexpress', label: 'Chilexpress' },
   { value: 'correos', label: 'Correos de Chile' },
   { value: 'starken', label: 'Starken' },
+  { value: 'varmontt', label: 'varmontt' },
+  { value: 'lemonde', label: 'lemonde' },
   { value: 'otro', label: 'Otro' }
 ]
 const LEGENDS = [

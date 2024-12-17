@@ -58,6 +58,11 @@
       { "value": "VIVAR IQUIQUE", "label": "VIVAR IQUIQUE" },
       { "value": "VIVAR LA SERENA", "label": "VIVAR LA SERENA" },
       { "value": "yASNA BUSTOS", "label": "OPTICAS DEL NORTE" },
+      { "value": "OPTICA CIRILO GONZALEZ", "label": "OPTICA CIRILO GONZALEZ" },
+      { "value": "OPTICA ANGELICA CUELLAR", "label": "OPTICA ANGELICA CUELLAR" },
+      { "value": "OPTICA MONTANA", "label": "OPTICA MONTANA" },
+      { "value": "VEA OPTICA", "label": "VEA OPTICA" },
+      { "value": "OPTICA SOTO LIMITADA", "label": "OPTICA SOTO LIMITADA" },
       { "value": "OTROS", "label": "OTROS" }
     ],
     "agreementOptions": [
