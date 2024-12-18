@@ -15,7 +15,7 @@ const areas = [
   },
   {
     name: "Laboratorio",
-    options: ["Superficie polimeros", "Superficie mineral", "Tratamiento", "Tratamiento AR", "Teñido", "Reparacion mineral"]
+    options: ["Superficie polimeros", "Superficie mineral", "Tratamiento", "Tratamiento AR", "Teñido", "Reparacion mineral", "Enviado a AR", "Recibido de AR"]
   },
   {
     name: "Merma",
