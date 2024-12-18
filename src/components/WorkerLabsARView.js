@@ -27,7 +27,9 @@ const COLUMNS = [
 const statusFilterOptions = [
   { value: 'all', label: 'Todos' },
   { value: 'AR', label: 'Antireflejo' },
-  { value: 'Merma', label: 'Mermas' }
+  { value: 'Merma', label: 'Mermas' },
+  { value: 'Recibido de AR', label: 'Recibido de AR' },
+  { value: 'Enviado a AR', label: 'Enviado a AR' }
 ]
 
 export default function WorkerLabsARView() {
