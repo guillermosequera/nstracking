@@ -144,10 +144,7 @@ export default function WorkerDispatchView() {
 
   const resetForm = () => {
     setJobNumber('')
-    setCompany('')
-    setClient('')
     setInvoiceNumber('')
-    setShippingCompany('')
     setShippingOrder('')
   }
 
