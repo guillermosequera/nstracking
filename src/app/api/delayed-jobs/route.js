@@ -9,22 +9,20 @@ export async function GET() {
     const auth = await getAuthClient()
     const sheets = google.sheets({ version: 'v4', auth })
     
-    // Obtener datos igual que en status/route.js
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetIds.status,
-      range: 'A:E',
+      range: 'A:F',
       valueRenderOption: 'FORMATTED_VALUE'
     })
 
     const rows = response.data.values || []
     console.log('Total de filas:', rows.length)
     
-    // Agrupar por número de trabajo
     const jobsMap = new Map()
     
+    // Agrupar por número de trabajo
     rows.forEach(row => {
       if (!row[0]) return
-      
       const jobNumber = row[0]
       if (!jobsMap.has(jobNumber)) {
         jobsMap.set(jobNumber, [])
@@ -37,57 +35,80 @@ export async function GET() {
     today.setHours(0, 0, 0, 0)
 
     jobsMap.forEach((jobRows, jobNumber) => {
+      console.log(`Analizando trabajo ${jobNumber}:`)
+      
       // Verificar si NO tiene estado de despacho
       const hasDispatch = jobRows.some(row => 
         row[3]?.toLowerCase().includes('despacho')
       )
       
       if (!hasDispatch) {
-        // Ordenar las filas por fecha como en status/route.js
+        // Ordenar las filas por fecha
         const sortedRows = jobRows.sort((a, b) => 
           new Date(a[1]) - new Date(b[1])
         )
         
-        const firstRow = sortedRows[0]
-        const firstDate = new Date(firstRow[1])
-        firstDate.setHours(0, 0, 0, 0)
-        
-        const lastRow = sortedRows[sortedRows.length - 1]
-        const lastDate = new Date(lastRow[1])
-        lastDate.setHours(0, 0, 0, 0)
-        
-        const delayDays = Math.floor((lastDate - firstDate) / (1000 * 60 * 60 * 24))
-        
-        if (delayDays > 0) {
-          // Obtener todas las filas para este trabajo
-          const jobHistory = rows.filter(row => row[0] === jobNumber);
+        const firstEntry = sortedRows[0]
+        const dueDate = firstEntry[5] // Fecha de entrega de la columna F
+
+        // Validar y parsear la fecha de entrega
+        let parsedDueDate
+        try {
+          // Verificar que dueDate existe y no está vacío
+          if (!dueDate) {
+            console.log(`Trabajo ${jobNumber}: Sin fecha de entrega`)
+            return // Continuar con el siguiente trabajo
+          }
+
+          // Intentar diferentes formatos de fecha
+          parsedDueDate = new Date(dueDate)
           
-          // Ordenar el historial por fecha
-          const sortedHistory = jobHistory.sort((a, b) => 
-            new Date(a[1]) - new Date(b[1])
-          );
+          // Si la fecha no es válida y tiene formato dd/mm/yyyy
+          if (isNaN(parsedDueDate.getTime()) && dueDate.includes('/')) {
+            const [day, month, year] = dueDate.split('/')
+            parsedDueDate = new Date(year, month - 1, day)
+          }
+          
+          parsedDueDate.setHours(0, 0, 0, 0)
 
-          const firstEntry = sortedHistory[0];
-          const lastEntry = sortedHistory[sortedHistory.length - 1];
+          console.log(`Trabajo ${jobNumber}:`, {
+            fechaEntrega: dueDate,
+            fechaParseada: parsedDueDate,
+            fechaHoy: today
+          })
 
-          delayedJobs.push({
-            id: jobNumber,
-            number: jobNumber,
-            entryDate: firstEntry[1],
-            dueDate: lastEntry[1],
-            area: lastEntry[2] || 'Sin área',
-            lastStatus: lastEntry[3] || 'Sin estado',
-            user: lastEntry[4] || 'No asignado',
-            delayDays,
-            // Agregamos el historial completo
-            statuses: jobHistory  // Aquí está la clave del cambio
-          });
+          if (!isNaN(parsedDueDate.getTime())) {
+            const delayDays = Math.ceil((today - parsedDueDate) / (1000 * 60 * 60 * 24))
+            
+            if (delayDays > 0) {
+              const lastEntry = sortedRows[sortedRows.length - 1]
+
+              delayedJobs.push({
+                id: jobNumber,
+                number: jobNumber,
+                entryDate: firstEntry[1],
+                dueDate: dueDate,
+                area: lastEntry[2] || 'Sin área',
+                lastStatus: lastEntry[3] || 'Sin estado',
+                user: lastEntry[4] || 'No asignado',
+                delayDays,
+                statuses: jobRows
+              })
+            }
+          } else {
+            console.error(`Fecha de entrega inválida para trabajo ${jobNumber}:`, dueDate)
+          }
+        } catch (error) {
+          console.error(`Error procesando fecha para trabajo ${jobNumber}:`, {
+            error: error.message,
+            dueDate,
+            firstEntry
+          })
         }
       }
     })
 
     delayedJobs.sort((a, b) => b.delayDays - a.delayDays)
-
     console.log(`Trabajos atrasados encontrados: ${delayedJobs.length}`)
     return Response.json(delayedJobs)
 

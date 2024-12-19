@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
 import { useDelayedJobs } from '@/hooks/useDelayedJobs'
+import { RefreshCw } from 'lucide-react'
 import LoadingState from '@/components/LoadingState'
 import ErrorState from '@/components/ErrorState'
 import EmptyState from '@/components/EmptyState'
@@ -12,10 +13,21 @@ import EmptyState from '@/components/EmptyState'
 const ITEMS_PER_PAGE = 100
 
 export default function DelayedJobsList() {
-  const { data: jobs, isLoading, error } = useDelayedJobs()
-  console.log('Jobs recibidos:', jobs)
+  const { data: jobs, isLoading, error, refetch } = useDelayedJobs()
   const [expandedJob, setExpandedJob] = useState(null)
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true)
+      await refetch()
+    } catch (error) {
+      console.error('Error al actualizar:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   const getJobColor = (delayDays) => {
     if (delayDays === 1) return 'bg-slate-800 border-slate-700'
@@ -26,13 +38,13 @@ export default function DelayedJobsList() {
   }
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'Fecha no disponible';
+    if (!dateString) return 'Fecha no disponible'
     
     try {
-      const date = new Date(dateString);
+      const date = new Date(dateString)
       if (isNaN(date.getTime())) {
-        console.error('Fecha inválida:', dateString);
-        return 'Fecha inválida';
+        console.error('Fecha inválida:', dateString)
+        return 'Fecha inválida'
       }
       
       return date.toLocaleString('es-ES', {
@@ -41,10 +53,10 @@ export default function DelayedJobsList() {
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit'
-      });
+      })
     } catch (error) {
-      console.error('Error al formatear fecha:', error);
-      return 'Error en fecha';
+      console.error('Error al formatear fecha:', error)
+      return 'Error en fecha'
     }
   }
 
@@ -53,9 +65,9 @@ export default function DelayedJobsList() {
   }
 
   const getSortedHistory = (statuses) => {
-    if (!Array.isArray(statuses)) return [];
-    return [...statuses].sort((a, b) => new Date(b[1]) - new Date(a[1]));
-  };
+    if (!Array.isArray(statuses)) return []
+    return [...statuses].sort((a, b) => new Date(b[1]) - new Date(a[1]))
+  }
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorState error={error} />
@@ -67,7 +79,21 @@ export default function DelayedJobsList() {
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold text-blue-600">Trabajos Atrasados</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-blue-600">Trabajos Atrasados</h1>
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            size="sm"
+            disabled={isRefreshing}
+            className="flex items-center gap-2 bg-slate-300 hover:bg-slate-700 text-blue-600 border-slate-600"
+          >
+            <RefreshCw 
+              className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+            />
+            <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
+          </Button>
+        </div>
         <div className="text-sm text-blue-500">
           Mostrando {displayedJobs.length} de {jobs.length} trabajos
         </div>
