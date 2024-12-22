@@ -41,36 +41,42 @@ export default function DelayedJobsList() {
     if (!dateString) return 'Fecha no disponible'
     
     try {
-      if (dateString.includes('/')) {
+      let date
+
+      // Si la fecha viene con guión (del backend)
+      if (dateString.includes('-')) {
+        const [day, month, year] = dateString.split('-')
+        date = new Date(year, month - 1, day)
+      }
+      // Si la fecha viene con slash
+      else if (dateString.includes('/')) {
         const [day, month, year] = dateString.split('/')
-        const date = new Date(year, month - 1, day)
-        if (!isNaN(date.getTime())) {
-          return date.toLocaleString('es-ES', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-          })
-        }
+        date = new Date(year, month - 1, day)
       }
-      
-      const date = new Date(dateString)
+      // Si viene en otro formato (ISO o similar)
+      else {
+        date = new Date(dateString)
+      }
+
+      // Verificar si la fecha es válida
       if (isNaN(date.getTime())) {
-        console.error('Fecha inválida:', dateString)
-        return dateString
+        console.log('Fecha original recibida:', dateString)
+        return dateString // Retornamos el string original si no pudimos parsearlo
       }
-      
-      return date.toLocaleString('es-ES', {
+
+      // Formatear a español Chile con zona horaria específica
+      return date.toLocaleString('es-CL', {
+        timeZone: 'America/Santiago',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit'
       })
+
     } catch (error) {
-      console.error('Error al formatear fecha:', error)
-      return dateString
+      console.log('Error al procesar fecha:', dateString, error)
+      return dateString // En caso de error, retornamos el string original
     }
   }
 
