@@ -22,7 +22,7 @@ export async function GET() {
     })
 
     const rows = response.data.values || []
-    console.log('Total de filas:', rows.length)
+    
     
     // Crear mapa para almacenar historial de estados por trabajo
     const historialTrabajos = new Map()
@@ -57,16 +57,12 @@ export async function GET() {
     
     // 2. Obtener trabajos en digitación
     const trabajosDigitacion = rows.filter(row => row[3] === 'Digitacion')
-    console.log('\n=== TRABAJOS EN DIGITACIÓN ===')
-    console.log('Cantidad:', trabajosDigitacion.length)
     trabajosDigitacion.forEach(row => {
       console.log(`Trabajo: ${row[0]}, Fecha Entrega: ${row[5]}, Area: ${row[2]}, Usuario: ${row[4]}`)
     })
 
     // 3. Filtrar trabajos pendientes
     const trabajosPendientes = trabajosDigitacion.filter(row => !trabajosEnDespacho.has(row[0]))
-    console.log('\n=== TRABAJOS PENDIENTES (En Digitación pero no en Despacho) ===')
-    console.log('Cantidad:', trabajosPendientes.length)
 
     // 4. Calcular atrasos con nuevo método
     const trabajosAtrasados = trabajosPendientes
@@ -118,13 +114,7 @@ export async function GET() {
       })
       .filter(trabajo => trabajo && trabajo.delayDays > 0)
 
-    console.log('\n=== TRABAJOS ATRASADOS ===')
-    console.log('Cantidad:', trabajosAtrasados.length)
     trabajosAtrasados.forEach(trabajo => {
-      console.log(`\nTrabajo: ${trabajo.number}`)
-      console.log(`Fecha Entrega Original: ${trabajo.fechaEntregaOriginal}`)
-      console.log(`Días Atraso: ${trabajo.delayDays}`)
-      console.log('Historial de estados:')
       trabajo.historial.forEach(estado => {
         console.log(`- ${estado.fecha}: ${estado.estado} (${estado.area}) - ${estado.usuario}`)
       })
