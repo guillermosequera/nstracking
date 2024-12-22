@@ -9,6 +9,12 @@ export async function GET() {
     const auth = await getAuthClient()
     const sheets = google.sheets({ version: 'v4', auth })
     
+    const today = new Date()
+    console.log('=== INFORMACIÓN DE TIEMPO ===')
+    console.log('Fecha y hora del servidor:', today.toISOString())
+    console.log('Timezone offset en minutos:', today.getTimezoneOffset())
+    console.log('Fecha local:', today.toLocaleString())
+    
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetIds.status,
       range: 'A:F',
