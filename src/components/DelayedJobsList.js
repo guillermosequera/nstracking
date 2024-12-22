@@ -146,7 +146,7 @@ export default function DelayedJobsList() {
               </div>
               <div className="text-xs mt-2 flex justify-between text-gray-300">
                 <span>Ingreso: {formatDate(job.entryDate)}</span>
-                <span>Fecha de entrega: {formatDate(job.fechaEntregaOriginal)}</span>
+                <span className='bg-slate-700 border border-slate-600 rounded-md px-2 py-1'>Fecha de entrega: {formatDate(job.fechaEntregaOriginal)}</span>
                 <span>Usuario: {job.user}</span>
               </div>
             </div>
