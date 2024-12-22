@@ -61,12 +61,11 @@ export default function DelayedJobsList() {
       // Verificar si la fecha es válida
       if (isNaN(date.getTime())) {
         console.log('Fecha original recibida:', dateString)
-        return dateString // Retornamos el string original si no pudimos parsearlo
+        return dateString
       }
 
-      // Formatear a español Chile con zona horaria específica
+      // Formatear a español Chile pero SIN especificar zona horaria
       return date.toLocaleString('es-CL', {
-        timeZone: 'America/Santiago',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -76,7 +75,7 @@ export default function DelayedJobsList() {
 
     } catch (error) {
       console.log('Error al procesar fecha:', dateString, error)
-      return dateString // En caso de error, retornamos el string original
+      return dateString
     }
   }
 
@@ -225,4 +224,4 @@ export default function DelayedJobsList() {
       )}
     </div>
   )
-} 
+}
