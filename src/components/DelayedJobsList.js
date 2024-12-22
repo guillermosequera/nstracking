@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
 import { useDelayedJobs } from '@/hooks/useDelayedJobs'
+import { RefreshCw } from 'lucide-react'
 import LoadingState from '@/components/LoadingState'
 import ErrorState from '@/components/ErrorState'
 import EmptyState from '@/components/EmptyState'
@@ -12,10 +13,21 @@ import EmptyState from '@/components/EmptyState'
 const ITEMS_PER_PAGE = 100
 
 export default function DelayedJobsList() {
-  const { data: jobs, isLoading, error } = useDelayedJobs()
-  console.log('Jobs recibidos:', jobs)
+  const { data: jobs, isLoading, error, refetch } = useDelayedJobs()
   const [expandedJob, setExpandedJob] = useState(null)
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true)
+      await refetch()
+    } catch (error) {
+      console.error('Error al actualizar:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   const getJobColor = (delayDays) => {
     if (delayDays === 1) return 'bg-slate-800 border-slate-700'
@@ -26,13 +38,27 @@ export default function DelayedJobsList() {
   }
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'Fecha no disponible';
+    if (!dateString) return 'Fecha no disponible'
     
     try {
-      const date = new Date(dateString);
+      if (dateString.includes('/')) {
+        const [day, month, year] = dateString.split('/')
+        const date = new Date(year, month - 1, day)
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleString('es-ES', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        }
+      }
+      
+      const date = new Date(dateString)
       if (isNaN(date.getTime())) {
-        console.error('Fecha inválida:', dateString);
-        return 'Fecha inválida';
+        console.error('Fecha inválida:', dateString)
+        return dateString
       }
       
       return date.toLocaleString('es-ES', {
@@ -41,21 +67,27 @@ export default function DelayedJobsList() {
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit'
-      });
+      })
     } catch (error) {
-      console.error('Error al formatear fecha:', error);
-      return 'Error en fecha';
+      console.error('Error al formatear fecha:', error)
+      return dateString
     }
+  }
+
+  const getLastStatus = (historial) => {
+    if (!Array.isArray(historial) || historial.length === 0) return ''
+    const sortedHistory = [...historial].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+    return sortedHistory[0].estado
   }
 
   const handleLoadMore = () => {
     setDisplayCount(prev => prev + ITEMS_PER_PAGE)
   }
 
-  const getSortedHistory = (statuses) => {
-    if (!Array.isArray(statuses)) return [];
-    return [...statuses].sort((a, b) => new Date(b[1]) - new Date(a[1]));
-  };
+  const getSortedHistory = (historial) => {
+    if (!Array.isArray(historial)) return []
+    return [...historial].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+  }
 
   if (isLoading) return <LoadingState />
   if (error) return <ErrorState error={error} />
@@ -67,7 +99,21 @@ export default function DelayedJobsList() {
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold text-blue-600">Trabajos Atrasados</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-blue-600">Trabajos Atrasados</h1>
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            size="sm"
+            disabled={isRefreshing}
+            className="flex items-center gap-2 bg-slate-300 hover:bg-slate-700 text-blue-600 border-slate-600"
+          >
+            <RefreshCw 
+              className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+            />
+            <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
+          </Button>
+        </div>
         <div className="text-sm text-blue-500">
           Mostrando {displayedJobs.length} de {jobs.length} trabajos
         </div>
@@ -95,12 +141,12 @@ export default function DelayedJobsList() {
                   </Badge>
                 </div>
                 <Badge variant="secondary" className="bg-slate-700 border text-xl text-white border-slate-600">
-                  {job.lastStatus}
+                  {getLastStatus(job.historial)}
                 </Badge>
               </div>
               <div className="text-xs mt-2 flex justify-between text-gray-300">
-                <span>Primer registro: {formatDate(job.entryDate)}</span>
-                <span>Último registro: {formatDate(job.dueDate)}</span>
+                <span>Ingreso: {formatDate(job.entryDate)}</span>
+                <span>Fecha de entrega: {formatDate(job.fechaEntregaOriginal)}</span>
                 <span>Usuario: {job.user}</span>
               </div>
             </div>
@@ -132,21 +178,21 @@ export default function DelayedJobsList() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-600">
-                        {job.statuses && getSortedHistory(job.statuses).map((entry, index) => (
+                        {job.historial && getSortedHistory(job.historial).map((entry, index) => (
                           <tr key={index} className="hover:bg-slate-700/30">
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                              {new Date(entry[1]).toLocaleString()}
+                              {formatDate(entry.fecha)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                              {entry[2]}
+                              {entry.area}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               <Badge variant="secondary" className="bg-slate-700 text-gray-200 border border-slate-600">
-                                {entry[3]}
+                                {entry.estado}
                               </Badge>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                              {entry[4]}
+                              {entry.usuario}
                             </td>
                           </tr>
                         ))}

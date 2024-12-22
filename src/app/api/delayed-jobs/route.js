@@ -9,93 +9,159 @@ export async function GET() {
     const auth = await getAuthClient()
     const sheets = google.sheets({ version: 'v4', auth })
     
-    // Obtener datos igual que en status/route.js
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetIds.status,
-      range: 'A:E',
+      range: 'A:F',
       valueRenderOption: 'FORMATTED_VALUE'
     })
 
     const rows = response.data.values || []
     console.log('Total de filas:', rows.length)
     
-    // Agrupar por número de trabajo
-    const jobsMap = new Map()
+    // Crear mapa para almacenar historial de estados por trabajo
+    const historialTrabajos = new Map()
     
+    // Procesar todas las filas para crear historial
     rows.forEach(row => {
-      if (!row[0]) return
+      if (!row[0]) return // Ignorar filas sin número de trabajo
       
-      const jobNumber = row[0]
-      if (!jobsMap.has(jobNumber)) {
-        jobsMap.set(jobNumber, [])
+      const numeroTrabajo = row[0]
+      if (!historialTrabajos.has(numeroTrabajo)) {
+        historialTrabajos.set(numeroTrabajo, [])
       }
-      jobsMap.get(jobNumber).push(row)
+      
+      historialTrabajos.get(numeroTrabajo).push({
+        fecha: row[1],
+        area: row[2],
+        estado: row[3],
+        usuario: row[4],
+        fechaEntrega: row[5]
+      })
+    })
+    
+    // 1. Obtener trabajos en despacho
+    const trabajosDespacho = rows.filter(row => row[3] === 'En despacho' || row[3] === 'Despacho - En despacho')
+    console.log('\n=== TRABAJOS EN DESPACHO ===')
+    console.log('Cantidad:', trabajosDespacho.length)
+    trabajosDespacho.forEach(row => {
+      console.log(`Trabajo: ${row[0]}, Fecha: ${row[1]}, Area: ${row[2]}, Usuario: ${row[4]}`)
     })
 
-    const delayedJobs = []
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const trabajosEnDespacho = new Set(trabajosDespacho.map(row => row[0]))
+    
+    // 2. Obtener trabajos en digitación
+    const trabajosDigitacion = rows.filter(row => row[3] === 'Digitacion')
+    console.log('\n=== TRABAJOS EN DIGITACIÓN ===')
+    console.log('Cantidad:', trabajosDigitacion.length)
+    trabajosDigitacion.forEach(row => {
+      console.log(`Trabajo: ${row[0]}, Fecha Entrega: ${row[5]}, Area: ${row[2]}, Usuario: ${row[4]}`)
+    })
 
-    jobsMap.forEach((jobRows, jobNumber) => {
-      // Verificar si NO tiene estado de despacho
-      const hasDispatch = jobRows.some(row => 
-        row[3]?.toLowerCase().includes('despacho')
-      )
-      
-      if (!hasDispatch) {
-        // Ordenar las filas por fecha como en status/route.js
-        const sortedRows = jobRows.sort((a, b) => 
-          new Date(a[1]) - new Date(b[1])
-        )
-        
-        const firstRow = sortedRows[0]
-        const firstDate = new Date(firstRow[1])
-        firstDate.setHours(0, 0, 0, 0)
-        
-        const lastRow = sortedRows[sortedRows.length - 1]
-        const lastDate = new Date(lastRow[1])
-        lastDate.setHours(0, 0, 0, 0)
-        
-        const delayDays = Math.floor((lastDate - firstDate) / (1000 * 60 * 60 * 24))
-        
-        if (delayDays > 0) {
-          // Obtener todas las filas para este trabajo
-          const jobHistory = rows.filter(row => row[0] === jobNumber);
-          
-          // Ordenar el historial por fecha
-          const sortedHistory = jobHistory.sort((a, b) => 
-            new Date(a[1]) - new Date(b[1])
-          );
+    // 3. Filtrar trabajos pendientes
+    const trabajosPendientes = trabajosDigitacion.filter(row => !trabajosEnDespacho.has(row[0]))
+    console.log('\n=== TRABAJOS PENDIENTES (En Digitación pero no en Despacho) ===')
+    console.log('Cantidad:', trabajosPendientes.length)
 
-          const firstEntry = sortedHistory[0];
-          const lastEntry = sortedHistory[sortedHistory.length - 1];
+    // 4. Calcular atrasos con nuevo método
+    const trabajosAtrasados = trabajosPendientes
+      .map(row => {
+        const fechaEntrega = row[5]
+        if (!fechaEntrega) return null
 
-          delayedJobs.push({
-            id: jobNumber,
-            number: jobNumber,
-            entryDate: firstEntry[1],
-            dueDate: lastEntry[1],
-            area: lastEntry[2] || 'Sin área',
-            lastStatus: lastEntry[3] || 'Sin estado',
-            user: lastEntry[4] || 'No asignado',
-            delayDays,
-            // Agregamos el historial completo
-            statuses: jobHistory  // Aquí está la clave del cambio
-          });
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        let parsedDueDate = new Date(fechaEntrega)
+        if (isNaN(parsedDueDate.getTime()) && fechaEntrega.includes('/')) {
+          const [day, month, year] = fechaEntrega.split('/')
+          const fullYear = year.length === 2 ? `20${year}` : year
+          parsedDueDate = new Date(fullYear, month - 1, day)
         }
-      }
+        parsedDueDate.setHours(0, 0, 0, 0)
+
+        if (isNaN(parsedDueDate.getTime())) {
+          console.log(`Fecha inválida para trabajo ${row[0]}: ${fechaEntrega}`)
+          return null
+        }
+
+        const minDate = new Date()
+        minDate.setFullYear(minDate.getFullYear() - 2)
+        if (parsedDueDate < minDate || parsedDueDate > today) {
+          console.log(`Fecha fuera de rango para trabajo ${row[0]}: ${fechaEntrega}`)
+          return null
+        }
+
+        const diasHabilesAtraso = calcularDiasHabilesAtraso(parsedDueDate, today)
+        const historial = historialTrabajos.get(row[0]) || []
+        
+        // Ordenar historial por fecha
+        historial.sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+
+        return {
+          id: row[0],
+          number: row[0],
+          entryDate: row[1],
+          area: row[2] || 'Sin área',
+          status: row[3],
+          user: row[4] || 'No asignado',
+          dueDate: fechaEntrega,
+          delayDays: diasHabilesAtraso,
+          historial: historial,
+          fechaEntregaOriginal: parsedDueDate.toLocaleDateString()
+        }
+      })
+      .filter(trabajo => trabajo && trabajo.delayDays > 0)
+
+    console.log('\n=== TRABAJOS ATRASADOS ===')
+    console.log('Cantidad:', trabajosAtrasados.length)
+    trabajosAtrasados.forEach(trabajo => {
+      console.log(`\nTrabajo: ${trabajo.number}`)
+      console.log(`Fecha Entrega Original: ${trabajo.fechaEntregaOriginal}`)
+      console.log(`Días Atraso: ${trabajo.delayDays}`)
+      console.log('Historial de estados:')
+      trabajo.historial.forEach(estado => {
+        console.log(`- ${estado.fecha}: ${estado.estado} (${estado.area}) - ${estado.usuario}`)
+      })
+      console.log('---')
     })
 
-    delayedJobs.sort((a, b) => b.delayDays - a.delayDays)
-
-    console.log(`Trabajos atrasados encontrados: ${delayedJobs.length}`)
-    return Response.json(delayedJobs)
+    // Ordenar por días de atraso
+    trabajosAtrasados.sort((a, b) => b.delayDays - a.delayDays)
+    
+    return Response.json(trabajosAtrasados)
 
   } catch (error) {
     console.error('Error en delayed-jobs:', error)
-    return Response.json(
-      { error: error.message },
-      { status: 500 }
-    )
+    return Response.json({ error: error.message }, { status: 500 })
   }
+}
+
+function calcularDiasHabilesAtraso(fechaEntrega, fechaActual) {
+  let diasHabiles = 0
+  const currentDate = new Date(fechaEntrega)
+  
+  // Si la fecha de entrega es posterior a la fecha actual, no hay atraso
+  if (currentDate > fechaActual) {
+    return 0
+  }
+
+  // Convertir ambas fechas a inicio del día para comparación correcta
+  currentDate.setHours(0, 0, 0, 0)
+  const endDate = new Date(fechaActual)
+  endDate.setHours(0, 0, 0, 0)
+  
+  // Avanzar al siguiente día después de la fecha de entrega
+  currentDate.setDate(currentDate.getDate() + 1)
+  
+  while (currentDate <= endDate) {
+    const dia = currentDate.getDay()
+    if (dia !== 0 && dia !== 6) { // 0 = Domingo, 6 = Sábado
+      diasHabiles++
+    }
+    currentDate.setDate(currentDate.getDate() + 1)
+  }
+
+  // Verificación adicional para evitar números imposibles
+  const maxDiasPermitidos = 365 * 2 // máximo 2 años de atraso
+  return Math.min(diasHabiles, maxDiasPermitidos)
 }
