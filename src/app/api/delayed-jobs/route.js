@@ -18,102 +18,150 @@ export async function GET() {
     const rows = response.data.values || []
     console.log('Total de filas:', rows.length)
     
-    const jobsMap = new Map()
+    // Crear mapa para almacenar historial de estados por trabajo
+    const historialTrabajos = new Map()
     
-    // Agrupar por número de trabajo
+    // Procesar todas las filas para crear historial
     rows.forEach(row => {
-      if (!row[0]) return
-      const jobNumber = row[0]
-      if (!jobsMap.has(jobNumber)) {
-        jobsMap.set(jobNumber, [])
+      if (!row[0]) return // Ignorar filas sin número de trabajo
+      
+      const numeroTrabajo = row[0]
+      if (!historialTrabajos.has(numeroTrabajo)) {
+        historialTrabajos.set(numeroTrabajo, [])
       }
-      jobsMap.get(jobNumber).push(row)
+      
+      historialTrabajos.get(numeroTrabajo).push({
+        fecha: row[1],
+        area: row[2],
+        estado: row[3],
+        usuario: row[4],
+        fechaEntrega: row[5]
+      })
+    })
+    
+    // 1. Obtener trabajos en despacho
+    const trabajosDespacho = rows.filter(row => row[3] === 'En despacho' || row[3] === 'Despacho - En despacho')
+    console.log('\n=== TRABAJOS EN DESPACHO ===')
+    console.log('Cantidad:', trabajosDespacho.length)
+    trabajosDespacho.forEach(row => {
+      console.log(`Trabajo: ${row[0]}, Fecha: ${row[1]}, Area: ${row[2]}, Usuario: ${row[4]}`)
     })
 
-    const delayedJobs = []
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const trabajosEnDespacho = new Set(trabajosDespacho.map(row => row[0]))
+    
+    // 2. Obtener trabajos en digitación
+    const trabajosDigitacion = rows.filter(row => row[3] === 'Digitacion')
+    console.log('\n=== TRABAJOS EN DIGITACIÓN ===')
+    console.log('Cantidad:', trabajosDigitacion.length)
+    trabajosDigitacion.forEach(row => {
+      console.log(`Trabajo: ${row[0]}, Fecha Entrega: ${row[5]}, Area: ${row[2]}, Usuario: ${row[4]}`)
+    })
 
-    jobsMap.forEach((jobRows, jobNumber) => {
-      console.log(`\nAnalizando trabajo ${jobNumber}:`)
-      
-      // 1. Primera Verificación - Buscar estado "Digitación"
-      const digitacionEntry = jobRows.find(row => row[3] === 'Digitación')
-      
-      if (!digitacionEntry) {
-        console.log(`- Trabajo ${jobNumber}: No tiene estado "Digitación"`)
-        return
-      }
+    // 3. Filtrar trabajos pendientes
+    const trabajosPendientes = trabajosDigitacion.filter(row => !trabajosEnDespacho.has(row[0]))
+    console.log('\n=== TRABAJOS PENDIENTES (En Digitación pero no en Despacho) ===')
+    console.log('Cantidad:', trabajosPendientes.length)
 
-      // Verificar fecha de entrega en registro de Digitación
-      const dueDate = digitacionEntry[5]
-      if (!dueDate) {
-        console.log(`- Trabajo ${jobNumber}: No tiene fecha de entrega en Digitación`)
-        return
-      }
+    // 4. Calcular atrasos con nuevo método
+    const trabajosAtrasados = trabajosPendientes
+      .map(row => {
+        const fechaEntrega = row[5]
+        if (!fechaEntrega) return null
 
-      // 2. Segunda Verificación - Estado "En despacho"
-      const hasDispatch = jobRows.some(row => row[3] === 'En despacho')
-      if (hasDispatch) {
-        console.log(`- Trabajo ${jobNumber}: Tiene estado "En despacho", se descarta`)
-        return
-      }
-
-      // 3. Tercera Verificación - Cálculo de Atraso
-      try {
-        let parsedDueDate = new Date(dueDate)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
         
-        if (isNaN(parsedDueDate.getTime()) && dueDate.includes('/')) {
-          const [day, month, year] = dueDate.split('/')
-          parsedDueDate = new Date(year, month - 1, day)
+        let parsedDueDate = new Date(fechaEntrega)
+        if (isNaN(parsedDueDate.getTime()) && fechaEntrega.includes('/')) {
+          const [day, month, year] = fechaEntrega.split('/')
+          const fullYear = year.length === 2 ? `20${year}` : year
+          parsedDueDate = new Date(fullYear, month - 1, day)
         }
-        
         parsedDueDate.setHours(0, 0, 0, 0)
 
-        if (!isNaN(parsedDueDate.getTime())) {
-          const delayDays = Math.ceil((today - parsedDueDate) / (1000 * 60 * 60 * 24))
-          
-          if (delayDays > 0) {
-            console.log(`- Trabajo ${jobNumber} está atrasado ${delayDays} días`)
-            
-            // Obtener último estado
-            const sortedRows = jobRows.sort((a, b) => new Date(b[1]) - new Date(a[1]))
-            const lastEntry = sortedRows[0]
-
-            delayedJobs.push({
-              id: jobNumber,
-              number: jobNumber,
-              entryDate: digitacionEntry[1],
-              dueDate: dueDate,
-              area: lastEntry[2] || 'Sin área',
-              lastStatus: lastEntry[3] || 'Sin estado',
-              user: lastEntry[4] || 'No asignado',
-              delayDays,
-              statuses: jobRows
-            })
-          } else {
-            console.log(`- Trabajo ${jobNumber} NO está atrasado (${delayDays} días)`)
-          }
-        } else {
-          console.error(`- Fecha de entrega inválida para trabajo ${jobNumber}:`, dueDate)
+        if (isNaN(parsedDueDate.getTime())) {
+          console.log(`Fecha inválida para trabajo ${row[0]}: ${fechaEntrega}`)
+          return null
         }
-      } catch (error) {
-        console.error(`Error procesando fecha para trabajo ${jobNumber}:`, {
-          error: error.message,
-          dueDate
-        })
-      }
+
+        const minDate = new Date()
+        minDate.setFullYear(minDate.getFullYear() - 2)
+        if (parsedDueDate < minDate || parsedDueDate > today) {
+          console.log(`Fecha fuera de rango para trabajo ${row[0]}: ${fechaEntrega}`)
+          return null
+        }
+
+        const diasHabilesAtraso = calcularDiasHabilesAtraso(parsedDueDate, today)
+        const historial = historialTrabajos.get(row[0]) || []
+        
+        // Ordenar historial por fecha
+        historial.sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+
+        return {
+          id: row[0],
+          number: row[0],
+          entryDate: row[1],
+          area: row[2] || 'Sin área',
+          status: row[3],
+          user: row[4] || 'No asignado',
+          dueDate: fechaEntrega,
+          delayDays: diasHabilesAtraso,
+          historial: historial,
+          fechaEntregaOriginal: parsedDueDate.toLocaleDateString()
+        }
+      })
+      .filter(trabajo => trabajo && trabajo.delayDays > 0)
+
+    console.log('\n=== TRABAJOS ATRASADOS ===')
+    console.log('Cantidad:', trabajosAtrasados.length)
+    trabajosAtrasados.forEach(trabajo => {
+      console.log(`\nTrabajo: ${trabajo.number}`)
+      console.log(`Fecha Entrega Original: ${trabajo.fechaEntregaOriginal}`)
+      console.log(`Días Atraso: ${trabajo.delayDays}`)
+      console.log('Historial de estados:')
+      trabajo.historial.forEach(estado => {
+        console.log(`- ${estado.fecha}: ${estado.estado} (${estado.area}) - ${estado.usuario}`)
+      })
+      console.log('---')
     })
 
-    delayedJobs.sort((a, b) => b.delayDays - a.delayDays)
-    console.log(`Trabajos atrasados encontrados: ${delayedJobs.length}`)
-    return Response.json(delayedJobs)
+    // Ordenar por días de atraso
+    trabajosAtrasados.sort((a, b) => b.delayDays - a.delayDays)
+    
+    return Response.json(trabajosAtrasados)
 
   } catch (error) {
     console.error('Error en delayed-jobs:', error)
-    return Response.json(
-      { error: error.message },
-      { status: 500 }
-    )
+    return Response.json({ error: error.message }, { status: 500 })
   }
+}
+
+function calcularDiasHabilesAtraso(fechaEntrega, fechaActual) {
+  let diasHabiles = 0
+  const currentDate = new Date(fechaEntrega)
+  
+  // Si la fecha de entrega es posterior a la fecha actual, no hay atraso
+  if (currentDate > fechaActual) {
+    return 0
+  }
+
+  // Convertir ambas fechas a inicio del día para comparación correcta
+  currentDate.setHours(0, 0, 0, 0)
+  const endDate = new Date(fechaActual)
+  endDate.setHours(0, 0, 0, 0)
+  
+  // Avanzar al siguiente día después de la fecha de entrega
+  currentDate.setDate(currentDate.getDate() + 1)
+  
+  while (currentDate <= endDate) {
+    const dia = currentDate.getDay()
+    if (dia !== 0 && dia !== 6) { // 0 = Domingo, 6 = Sábado
+      diasHabiles++
+    }
+    currentDate.setDate(currentDate.getDate() + 1)
+  }
+
+  // Verificación adicional para evitar números imposibles
+  const maxDiasPermitidos = 365 * 2 // máximo 2 años de atraso
+  return Math.min(diasHabiles, maxDiasPermitidos)
 }

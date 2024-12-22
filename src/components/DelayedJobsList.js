@@ -41,10 +41,24 @@ export default function DelayedJobsList() {
     if (!dateString) return 'Fecha no disponible'
     
     try {
+      if (dateString.includes('/')) {
+        const [day, month, year] = dateString.split('/')
+        const date = new Date(year, month - 1, day)
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleString('es-ES', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        }
+      }
+      
       const date = new Date(dateString)
       if (isNaN(date.getTime())) {
         console.error('Fecha inválida:', dateString)
-        return 'Fecha inválida'
+        return dateString
       }
       
       return date.toLocaleString('es-ES', {
@@ -56,17 +70,23 @@ export default function DelayedJobsList() {
       })
     } catch (error) {
       console.error('Error al formatear fecha:', error)
-      return 'Error en fecha'
+      return dateString
     }
+  }
+
+  const getLastStatus = (historial) => {
+    if (!Array.isArray(historial) || historial.length === 0) return ''
+    const sortedHistory = [...historial].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+    return sortedHistory[0].estado
   }
 
   const handleLoadMore = () => {
     setDisplayCount(prev => prev + ITEMS_PER_PAGE)
   }
 
-  const getSortedHistory = (statuses) => {
-    if (!Array.isArray(statuses)) return []
-    return [...statuses].sort((a, b) => new Date(b[1]) - new Date(a[1]))
+  const getSortedHistory = (historial) => {
+    if (!Array.isArray(historial)) return []
+    return [...historial].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
   }
 
   if (isLoading) return <LoadingState />
@@ -121,12 +141,12 @@ export default function DelayedJobsList() {
                   </Badge>
                 </div>
                 <Badge variant="secondary" className="bg-slate-700 border text-xl text-white border-slate-600">
-                  {job.lastStatus}
+                  {getLastStatus(job.historial)}
                 </Badge>
               </div>
               <div className="text-xs mt-2 flex justify-between text-gray-300">
-                <span>Primer registro: {formatDate(job.entryDate)}</span>
-                <span>Último registro: {formatDate(job.dueDate)}</span>
+                <span>Ingreso: {formatDate(job.entryDate)}</span>
+                <span>Fecha de entrega: {formatDate(job.fechaEntregaOriginal)}</span>
                 <span>Usuario: {job.user}</span>
               </div>
             </div>
@@ -158,21 +178,21 @@ export default function DelayedJobsList() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-600">
-                        {job.statuses && getSortedHistory(job.statuses).map((entry, index) => (
+                        {job.historial && getSortedHistory(job.historial).map((entry, index) => (
                           <tr key={index} className="hover:bg-slate-700/30">
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                              {new Date(entry[1]).toLocaleString()}
+                              {formatDate(entry.fecha)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                              {entry[2]}
+                              {entry.area}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               <Badge variant="secondary" className="bg-slate-700 text-gray-200 border border-slate-600">
-                                {entry[3]}
+                                {entry.estado}
                               </Badge>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                              {entry[4]}
+                              {entry.usuario}
                             </td>
                           </tr>
                         ))}
