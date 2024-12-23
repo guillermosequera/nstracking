@@ -265,7 +265,7 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
       {selectedCell && (
         <div className="mt-8">
           <h3 className="text-lg font-semibold mb-4">
-            Trabajos en estado "{selectedCell.estado}" {
+            Trabajos en estado &quot;{selectedCell.estado}&quot; {
               selectedCell.categoria === 'total' 
                 ? '- Todos'
                 : `- ${DELIVERY_COLUMNS.find(col => col.key === selectedCell.categoria).label}`

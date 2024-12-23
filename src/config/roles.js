@@ -2,7 +2,7 @@
 
 export const roles = {
     admin: ['admin@example.com'],
-    adminProduction: ['adminProduction@example.com'],
+    adminProduction: ['adminProduction@example.com', 'tecnico.ti@italoptic.cl','produccion@italoptic.cl'],
     adminFinance: ['adminFinance@example.com'],
     adminCommerce: ['adminCommerce@example.com'],
     adminRRHH: ['adminRRHH@example.com'],
@@ -11,7 +11,7 @@ export const roles = {
                       'bodegacentral@italoptic.cl',
                       'bodegaitaloptic@gmail.com',
                       'bodegacentraltrento@gmail.com',
-                      'tecnico.ti@italoptic.cl'
+                      
                     ],
     workerCommerce: [
                       'ejecutivo4@italoptic.cl', 
@@ -53,6 +53,7 @@ export const roles = {
     merma: process.env.NEXT_PUBLIC_SHEET_ID_MERMA_SHEET,
     garantia: process.env.NEXT_PUBLIC_SHEET_ID_WARRANTY_SHEET,
     unassignedDispatch: process.env.NEXT_PUBLIC_SHEET_ID_UNASSIGNED_DISPATCH_SHEET,
+    transactionLogs: process.env.NEXT_PUBLIC_SHEET_ID_TRANSACTION_LOGS_SHEET,
   };
   
   export function getUserRole(email) {
