@@ -179,34 +179,42 @@ export const onEdit = async (jobNumber, updatedData) => {
   }
 };
 
-export const addJob = async (jobNumber, userEmail, role, activePage, status) => {
-  console.log(`Adding job for user: ${userEmail} on page: ${activePage}, role: ${role}`);
+export const addJob = async (jobNumber, userEmail, role, activePage, status, maxRetries = 3) => {
+  let attempt = 0;
   
-  try {
-    const response = await fetch('/api/sheets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jobNumber: jobNumber.trim(),
-        timestamp: new Date().toISOString(),
-        userEmail,
-        role,        // Para determinar sheetId del área
-        activePage,  // Para getStatusFromPage si no hay status
-        status      // Status explícito si existe
-      }),
-    });
+  while (attempt < maxRetries) {
+    try {
+      const response = await fetch('/api/sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobNumber: jobNumber.trim(),
+          timestamp: new Date().toISOString(),
+          userEmail,
+          role,
+          activePage,
+          status,
+          attempt: attempt + 1
+        }),
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to add job');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to add job');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`Error en intento ${attempt + 1}:`, error);
+      attempt++;
+      
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Esperar antes de reintentar
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
     }
-
-    const data = await response.json();
-    console.log('Added new job:', data.newJob);
-    return data.newJob;
-  } catch (error) {
-    console.error('Error adding job:', error);
-    throw error;
   }
 };
 
@@ -387,10 +395,14 @@ export const fetchQualityJobs = async (sheet) => {
 
 export const fetchDelayedJobs = async () => {
   try {
-    const response = await fetch('/api/delayed-jobs', {
+    const timestamp = new Date().getTime();
+    const response = await fetch(`/api/delayed-jobs?t=${timestamp}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       },
     });
 
@@ -400,10 +412,7 @@ export const fetchDelayedJobs = async () => {
     }
 
     const data = await response.json();
-    
-    // Los datos ya vienen formateados desde la API
     console.log(`Recibidos ${data.length} trabajos atrasados`);
-    
     return data;
 
   } catch (error) {
@@ -411,3 +420,18 @@ export const fetchDelayedJobs = async () => {
     throw new Error(`No se pudieron cargar los trabajos atrasados: ${error.message}`);
   }
 };
+
+export async function updateJobAreaAndStatus(jobId, areaChange, statusChange, userId) {
+  const transactionResult = await TransactionManager.executeTransaction({
+    jobId,
+    areaChange,
+    statusChange,
+    userId
+  });
+
+  if (!transactionResult.success) {
+    throw new Error(`Failed to update job: ${transactionResult.error}`);
+  }
+
+  return transactionResult.data;
+}

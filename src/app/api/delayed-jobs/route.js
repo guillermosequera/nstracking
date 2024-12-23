@@ -3,47 +3,46 @@ import { sheetIds } from '@/config/roles'
 import { getAuthClient } from '@/utils/googleAuth'
 
 function procesarFecha(fechaOriginal, numeroTrabajo) {
-  // 1. Validación inicial
   if (!fechaOriginal) {
     console.log(`Trabajo ${numeroTrabajo}: Fecha vacía o nula`)
     return null
   }
 
-  // 2. Parseo de fecha ISO
+  // Asegurarnos de que la fecha se interprete como UTC
   const fechaParsed = new Date(fechaOriginal)
+  const fechaUTC = new Date(Date.UTC(
+    fechaParsed.getUTCFullYear(),
+    fechaParsed.getUTCMonth(),
+    fechaParsed.getUTCDate(),
+    fechaParsed.getUTCHours(),
+    fechaParsed.getUTCMinutes(),
+    fechaParsed.getUTCSeconds()
+  ))
   
-  // 3. Ajuste de zona horaria para Chile y validaciones
-  if (!isNaN(fechaParsed.getTime())) {
-    // Ajustar a hora Chile (UTC-3)
-    fechaParsed.setHours(fechaParsed.getHours() - 3)
-    // Resetear hora a medianoche
-    fechaParsed.setHours(0, 0, 0, 0)
-    
+  if (!isNaN(fechaUTC.getTime())) {
     console.log(`\n=== Procesando fecha para trabajo ${numeroTrabajo} ===`)
     console.log('  Fecha original:', fechaOriginal)
-    console.log('  Fecha ajustada:', fechaParsed.toISOString())
+    console.log('  Fecha UTC:', fechaUTC.toISOString())
     
-    // 4. Validación de rango
+    // Validación de rango
     const fechaHoy = new Date()
-    fechaHoy.setHours(0, 0, 0, 0)
+    const fechaHoyUTC = new Date(Date.UTC(
+      fechaHoy.getUTCFullYear(),
+      fechaHoy.getUTCMonth(),
+      fechaHoy.getUTCDate()
+    ))
+    const fechaMinima = new Date(fechaHoyUTC)
+    fechaMinima.setFullYear(fechaHoyUTC.getUTCFullYear() - 2)
     
-    const fechaMinima = new Date()
-    fechaMinima.setFullYear(fechaHoy.getFullYear() - 2)
-    fechaMinima.setHours(0, 0, 0, 0)
-    
-    if (fechaParsed < fechaMinima || fechaParsed > fechaHoy) {
-      console.log(`  Fecha fuera de rango permitido (${fechaMinima.toISOString()} - ${fechaHoy.toISOString()})`)
+    if (fechaUTC < fechaMinima || fechaUTC > fechaHoyUTC) {
+      console.log(`  Fecha fuera de rango permitido (${fechaMinima.toISOString()} - ${fechaHoyUTC.toISOString()})`)
       return null
     }
     
     return {
-      fechaParaProcesar: fechaParsed,
-      fechaParaMostrar: fechaParsed.toLocaleDateString('es-CL', {
-        timeZone: 'America/Santiago',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      })
+      fechaParaProcesar: fechaUTC,
+      fechaParaMostrar: fechaUTC.toISOString(),
+      fechaFormateada: `${String(fechaUTC.getUTCDate()).padStart(2, '0')}-${String(fechaUTC.getUTCMonth() + 1).padStart(2, '0')}-${fechaUTC.getUTCFullYear()}`
     }
   }
   
@@ -58,12 +57,6 @@ export async function GET() {
     const auth = await getAuthClient()
     const sheets = google.sheets({ version: 'v4', auth })
     
-    const today = new Date()
-    console.log('=== INFORMACIÓN DE TIEMPO ===')
-    console.log('Fecha y hora del servidor:', today.toISOString())
-    console.log('Timezone offset en minutos:', today.getTimezoneOffset())
-    console.log('Fecha local:', today.toLocaleString())
-    
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetIds.status,
       range: 'A:F',
@@ -71,21 +64,18 @@ export async function GET() {
     })
 
     const rows = response.data.values || []
+    console.log(`Total de registros obtenidos: ${rows.length}`)
     
-    
-    // Crear mapa para almacenar historial de estados por trabajo
+    // 1. Procesamos el historial
     const historialTrabajos = new Map()
-    
-    // Procesar todas las filas para crear historial
     rows.forEach(row => {
-      if (!row[0]) return // Ignorar filas sin número de trabajo
+      if (!row[0]) return
       
-      const numeroTrabajo = row[0]
-      if (!historialTrabajos.has(numeroTrabajo)) {
-        historialTrabajos.set(numeroTrabajo, [])
+      if (!historialTrabajos.has(row[0])) {
+        historialTrabajos.set(row[0], [])
       }
       
-      historialTrabajos.get(numeroTrabajo).push({
+      historialTrabajos.get(row[0]).push({
         fecha: row[1],
         area: row[2],
         estado: row[3],
@@ -94,61 +84,77 @@ export async function GET() {
       })
     })
     
-    // 1. Obtener trabajos en despacho
-    const trabajosDespacho = rows.filter(row => row[3] === 'En despacho' || row[3] === 'Despacho - En despacho')
-    console.log('\n=== TRABAJOS EN DESPACHO ===')
-    console.log('Cantidad:', trabajosDespacho.length)
-    trabajosDespacho.forEach(row => {
-      console.log(`Trabajo: ${row[0]}, Fecha: ${row[1]}, Area: ${row[2]}, Usuario: ${row[4]}`)
-    })
+    console.log(`Total de trabajos únicos: ${historialTrabajos.size}`)
 
-    const trabajosEnDespacho = new Set(trabajosDespacho.map(row => row[0]))
-    
-    // 2. Obtener trabajos en digitación
-    const trabajosDigitacion = rows.filter(row => row[3] === 'Digitacion')
-    trabajosDigitacion.forEach(row => {
-      console.log(`Trabajo: ${row[0]}, Fecha Entrega: ${row[5]}, Area: ${row[2]}, Usuario: ${row[4]}`)
-    })
+    // 2. Filtramos los trabajos pendientes
+    const trabajosPendientes = Array.from(historialTrabajos.entries())
+      .filter(([numeroTrabajo, historial]) => {
+        const tuvoDigitacion = historial.some(registro => 
+          registro.estado === 'Digitacion'
+        );
 
-    // 3. Filtrar trabajos pendientes
-    const trabajosPendientes = trabajosDigitacion.filter(row => !trabajosEnDespacho.has(row[0]))
+        const tuvoDespacho = historial.some(registro => 
+          registro.estado === 'En despacho' || 
+          registro.estado === 'Despacho - En despacho'
+        );
 
-    // 4. Calcular atrasos con nuevo método
-    const trabajosAtrasados = trabajosPendientes
-      .map(row => {
-        const fechaEntrega = row[5]
-        const fechaProcesada = procesarFecha(fechaEntrega, row[0])
+        // Obtener el estado actual (último registro)
+        const estadoActual = historial
+          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
+
+        const estaEnProceso = !['En despacho', 'Despacho - En despacho'].includes(estadoActual.estado);
+
+        // Log para debug
+        if (tuvoDigitacion && !tuvoDespacho && estaEnProceso) {
+          console.log(`Trabajo ${numeroTrabajo}: Estado actual = ${estadoActual.estado}`);
+        }
+
+        return tuvoDigitacion && !tuvoDespacho && estaEnProceso;
+      })
+      .map(([numeroTrabajo, historial]) => {
+        // Obtener el registro de digitación más reciente
+        const registrosDigitacion = historial
+          .filter(registro => registro.estado === 'Digitacion')
+          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
         
+        const ultimaDigitacion = registrosDigitacion[0];
+        
+        return {
+          id: numeroTrabajo,
+          number: numeroTrabajo,
+          entryDate: ultimaDigitacion.fecha,
+          area: ultimaDigitacion.area || 'Sin área',
+          status: ultimaDigitacion.estado,
+          user: ultimaDigitacion.usuario || 'No asignado',
+          dueDate: ultimaDigitacion.fechaEntrega,
+          historial: historial
+        };
+      });
+
+    console.log('\n=== RESUMEN DE TRABAJOS ===')
+    console.log('Total trabajos pendientes:', trabajosPendientes.length)
+
+    // 3. Calculamos los atrasos
+    const trabajosAtrasados = trabajosPendientes
+      .map(trabajo => {
+        const fechaProcesada = procesarFecha(trabajo.dueDate, trabajo.number)
         if (!fechaProcesada) return null
 
         const today = new Date()
         today.setHours(0, 0, 0, 0)
 
-        const diasHabilesAtraso = calcularDiasHabilesAtraso(fechaProcesada.fechaParaProcesar, today)
-        const historial = historialTrabajos.get(row[0]) || []
-        
-        // Ordenar historial por fecha
-        historial.sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+        const diasHabilesAtraso = calcularDiasHabilesAtraso(
+          fechaProcesada.fechaParaProcesar, 
+          today
+        )
 
-        return {
-          id: row[0],
-          number: row[0],
-          entryDate: row[1],
-          area: row[2] || 'Sin área',
-          status: row[3],
-          user: row[4] || 'No asignado',
-          dueDate: fechaEntrega,
+        return diasHabilesAtraso > 0 ? {
+          ...trabajo,
           delayDays: diasHabilesAtraso,
-          historial: historial,
-          fechaEntregaOriginal: fechaProcesada.fechaParaMostrar
-        }
+          fechaEntregaOriginal: fechaProcesada.fechaFormateada
+        } : null
       })
-      .filter(trabajo => trabajo && trabajo.delayDays > 0)
-
-    console.log('\n=== RESUMEN DE TRABAJOS ===')
-    console.log('Total trabajos en despacho:', trabajosDespacho.length)
-    console.log('Total trabajos en digitación:', trabajosDigitacion.length)
-    console.log('Total trabajos pendientes:', trabajosPendientes.length)
+      .filter(Boolean)
 
     console.log('\n=== RESUMEN FINAL ===')
     console.log('Total trabajos atrasados:', trabajosAtrasados.length)
@@ -166,27 +172,37 @@ export async function GET() {
 
 function calcularDiasHabilesAtraso(fechaEntrega, fechaActual) {
   let diasHabiles = 0
-  const currentDate = new Date(fechaEntrega)
+  
+  // Asegurarnos de que ambas fechas estén en UTC y al inicio del día
+  const fechaEntregaUTC = new Date(Date.UTC(
+    fechaEntrega.getUTCFullYear(),
+    fechaEntrega.getUTCMonth(),
+    fechaEntrega.getUTCDate()
+  ))
+  
+  const fechaActualUTC = new Date(Date.UTC(
+    fechaActual.getUTCFullYear(),
+    fechaActual.getUTCMonth(),
+    fechaActual.getUTCDate()
+  ))
   
   // Si la fecha de entrega es posterior a la fecha actual, no hay atraso
-  if (currentDate > fechaActual) {
+  if (fechaEntregaUTC > fechaActualUTC) {
     return 0
   }
 
-  // Convertir ambas fechas a inicio del día para comparación correcta
-  currentDate.setHours(0, 0, 0, 0)
-  const endDate = new Date(fechaActual)
-  endDate.setHours(0, 0, 0, 0)
+  const currentDate = new Date(fechaEntregaUTC)
+  const endDate = new Date(fechaActualUTC)
   
   // Avanzar al siguiente día después de la fecha de entrega
-  currentDate.setDate(currentDate.getDate() + 1)
+  currentDate.setUTCDate(currentDate.getUTCDate() + 1)
   
   while (currentDate <= endDate) {
-    const dia = currentDate.getDay()
+    const dia = currentDate.getUTCDay()
     if (dia !== 0 && dia !== 6) { // 0 = Domingo, 6 = Sábado
       diasHabiles++
     }
-    currentDate.setDate(currentDate.getDate() + 1)
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1)
   }
 
   // Verificación adicional para evitar números imposibles

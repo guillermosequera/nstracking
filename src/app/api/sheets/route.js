@@ -61,6 +61,19 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
     }
 
+    if (!jobNumber || !timestamp || !userEmail || !role || !activePage) {
+      console.error('Campos requeridos faltantes:', { jobNumber, timestamp, userEmail, role, activePage });
+      return NextResponse.json({ 
+        error: 'Todos los campos son requeridos',
+        missing: { jobNumber, timestamp, userEmail, role, activePage }
+      }, { status: 400 });
+    }
+
+    if (!statusSheetId) {
+      console.error('ID de hoja de status no encontrado');
+      return NextResponse.json({ error: 'Error de configuración: ID de hoja de status no encontrado' }, { status: 500 });
+    }
+
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
@@ -82,21 +95,31 @@ export async function POST(request) {
 
     // Agregar a la hoja del área
     console.log('Agregando a hoja del área:', values);
-    await sheets.spreadsheets.values.append({
+    const areaResponse = await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
-      range: 'A:D', // Actualizado para incluir la columna D
+      range: 'A:D',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values }
     });
 
+    if (!areaResponse.status === 200) {
+      throw new Error('Error al agregar a hoja del área');
+    }
+
     // Agregar a la hoja de status
     console.log('Agregando a hoja de status:', statusValues);
-    await sheets.spreadsheets.values.append({
+    const statusResponse = await sheets.spreadsheets.values.append({
       spreadsheetId: statusSheetId,
       range: 'A:F',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: statusValues }
     });
+
+    if (!statusResponse.status === 200) {
+      // Intentar revertir la operación anterior
+      // ... código para revertir ...
+      throw new Error('Error al agregar a hoja de status');
+    }
 
     return NextResponse.json({
       success: true,
