@@ -12,6 +12,37 @@ import EmptyState from '@/components/EmptyState'
 
 const ITEMS_PER_PAGE = 100
 
+// Función para procesar fechas de manera consistente
+function procesarFecha(fechaOriginal, numeroTrabajo) {
+  if (!fechaOriginal) {
+    console.log(`Trabajo ${numeroTrabajo}: Fecha vacía o nula`);
+    return null;
+  }
+
+  // Asegurarnos de que la fecha se interprete como UTC
+  const fechaParsed = new Date(fechaOriginal);
+  const fechaUTC = new Date(Date.UTC(
+    fechaParsed.getUTCFullYear(),
+    fechaParsed.getUTCMonth(),
+    fechaParsed.getUTCDate(),
+    fechaParsed.getUTCHours(),
+    fechaParsed.getUTCMinutes(),
+    fechaParsed.getUTCSeconds()
+  ));
+  
+  if (!isNaN(fechaUTC.getTime())) {
+    return {
+      fechaParaProcesar: fechaUTC,
+      fechaParaMostrar: fechaUTC.toISOString(),
+      fechaFormateada: `${String(fechaUTC.getUTCDate()).padStart(2, '0')}-${String(fechaUTC.getUTCMonth() + 1).padStart(2, '0')}-${fechaUTC.getUTCFullYear()}`,
+      fechaConHora: `${String(fechaUTC.getUTCDate()).padStart(2, '0')}-${String(fechaUTC.getUTCMonth() + 1).padStart(2, '0')}-${fechaUTC.getUTCFullYear()} ${String(fechaUTC.getUTCHours()).padStart(2, '0')}:${String(fechaUTC.getUTCMinutes()).padStart(2, '0')}`
+    };
+  }
+  
+  console.log(`Trabajo ${numeroTrabajo}: Fecha inválida:`, fechaOriginal);
+  return null;
+}
+
 export default function DelayedJobsList() {
   const { data: jobs, isLoading, error, refetch } = useDelayedJobs()
   const [expandedJob, setExpandedJob] = useState(null)
@@ -37,46 +68,13 @@ export default function DelayedJobsList() {
     return 'bg-slate-800 border-slate-700'
   }
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Fecha no disponible'
+  const formatDate = (dateString, includeTime = true) => {
+    if (!dateString) return 'Fecha no disponible';
     
-    try {
-      let date
-
-      // Si la fecha viene con guión (del backend)
-      if (dateString.includes('-')) {
-        const [day, month, year] = dateString.split('-')
-        date = new Date(year, month - 1, day)
-      }
-      // Si la fecha viene con slash
-      else if (dateString.includes('/')) {
-        const [day, month, year] = dateString.split('/')
-        date = new Date(year, month - 1, day)
-      }
-      // Si viene en otro formato (ISO o similar)
-      else {
-        date = new Date(dateString)
-      }
-
-      // Verificar si la fecha es válida
-      if (isNaN(date.getTime())) {
-        console.log('Fecha original recibida:', dateString)
-        return dateString
-      }
-
-      // Formatear a español Chile pero SIN especificar zona horaria
-      return date.toLocaleString('es-CL', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-
-    } catch (error) {
-      console.log('Error al procesar fecha:', dateString, error)
-      return dateString
-    }
+    const fechaProcesada = procesarFecha(dateString);
+    if (!fechaProcesada) return 'Fecha inválida';
+    
+    return includeTime ? fechaProcesada.fechaConHora : fechaProcesada.fechaFormateada;
   }
 
   const getLastStatus = (historial) => {
@@ -151,7 +149,9 @@ export default function DelayedJobsList() {
               </div>
               <div className="text-xs mt-2 flex justify-between text-gray-300">
                 <span>Ingreso: {formatDate(job.entryDate)}</span>
-                <span className='bg-slate-700 border border-slate-600 rounded-md px-2 py-1'>Fecha de entrega: {formatDate(job.fechaEntregaOriginal)}</span>
+                <span className='bg-slate-700 border border-slate-600 rounded-md px-2 py-1'>
+                  Fecha de entrega: {formatDate(job.fechaEntregaOriginal)}
+                </span>
                 <span>Usuario: {job.user}</span>
               </div>
             </div>
