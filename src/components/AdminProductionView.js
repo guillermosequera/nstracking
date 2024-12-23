@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { useProductionJobs } from '@/hooks/useProductionJobs';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSession } from 'next-auth/react';
 import {
   Table,
   TableBody,
@@ -11,6 +14,8 @@ import { Badge } from '@/components/ui/badge.js';
 import { Button } from '@/components/ui/Button.js';
 import { RefreshCw } from 'lucide-react';
 import ProductionJobsList from './ProductionJobsList';
+import LoadingState from '@/components/LoadingState';
+import ErrorState from '@/components/ErrorState';
 
 // Función para procesar fechas similar a delayed-jobs
 function procesarFecha(fechaOriginal, numeroTrabajo) {
@@ -94,9 +99,13 @@ const AREA_PRIORITY = {
   quality: 7
 };
 
-export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
+export default function AdminProductionView() {
   const [selectedCell, setSelectedCell] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: session } = useSession();
+
+  const { data: trabajosAgrupados = {}, isLoading, error, refetch } = useProductionJobs();
 
   // Ordenar estados por área
   const estadosOrdenados = Object.entries(trabajosAgrupados)
@@ -109,6 +118,94 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
       
       return prioridadA - prioridadB;
     });
+
+  // Calcular el total de trabajos por estado
+  const calcularTotal = useCallback((jobs) => {
+    return DELIVERY_COLUMNS.reduce((total, column) => {
+      return total + (jobs[column.key]?.length || 0);
+    }, 0);
+  }, []);
+
+  // Calcular el total general
+  const totalGeneral = useMemo(() => {
+    return estadosOrdenados.reduce((total, [_, data]) => {
+      return total + calcularTotal(data.jobs);
+    }, 0);
+  }, [estadosOrdenados, calcularTotal]);
+
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    
+    const currentTotalJobs = totalGeneral;
+    const currentSelectedCell = selectedCell;
+    
+    try {
+      setIsRefreshing(true);
+      
+      // Crear una promesa que se resolverá después de un tiempo mínimo
+      const minDelay = new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Ejecutar la actualización y esperar los resultados
+      const [refreshResult] = await Promise.all([
+        refetch(),
+        minDelay
+      ]);
+
+      // Verificar si los datos se actualizaron correctamente
+      if (!refreshResult || !refreshResult.data) {
+        throw new Error('No se recibieron datos en la actualización');
+      }
+
+      const newData = refreshResult.data;
+      
+      // Calcular el nuevo total después de la actualización
+      const newTotal = Object.values(newData).reduce((total, area) => {
+        return total + Object.values(area.jobs || {}).flat().length;
+      }, 0);
+
+      // Comparar con los datos anteriores
+      console.log(`Actualización completada:
+        - Total trabajos anteriores: ${currentTotalJobs}
+        - Total trabajos nuevos: ${newTotal}
+        - Diferencia: ${newTotal - currentTotalJobs}
+      `);
+
+      // Verificar cambios por área
+      Object.entries(newData).forEach(([area, data]) => {
+        const totalArea = Object.values(data.jobs || {}).flat().length;
+        console.log(`Área ${area}: ${totalArea} trabajos`);
+      });
+
+      // Si hay una celda seleccionada, verificar si aún existe en los nuevos datos
+      if (currentSelectedCell) {
+        const estadoExiste = newData[currentSelectedCell.estado];
+        const categoriaExiste = currentSelectedCell.categoria === 'total' || 
+          (estadoExiste?.jobs && estadoExiste.jobs[currentSelectedCell.categoria]?.length > 0);
+
+        if (!estadoExiste || !categoriaExiste) {
+          setSelectedCell(null);
+          console.log('La selección actual ya no existe en los nuevos datos');
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error al actualizar:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, totalGeneral, selectedCell, refetch]);
+
+  // Auto-refresh cada 5 minutos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      handleRefresh();
+    }, 300000); // 5 minutos
+
+    return () => clearInterval(interval);
+  }, [handleRefresh]);
+
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState error={error} />;
 
   const handleCellClick = (estado, categoria) => {
     setSelectedCell(prev => 
@@ -125,106 +222,6 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
         : { estado, categoria: 'total' }
     );
   };
-
-  const handleRefresh = async () => {
-    if (isRefreshing) return;
-    
-    // Guardar el estado actual antes de actualizar
-    const currentTotalJobs = totalGeneral;
-    const currentSelectedCell = selectedCell;
-    
-    try {
-      setIsRefreshing(true);
-      
-      // Crear una promesa que se resolverá después de un tiempo mínimo
-      const minDelay = new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Ejecutar la actualización y esperar los resultados
-      const [refreshResult] = await Promise.all([
-        onRefresh().then(result => {
-          if (!result) {
-            console.log('No se recibieron datos en la actualización');
-            return null;
-          }
-
-          // Calcular el nuevo total después de la actualización
-          const newTotal = Object.values(result).reduce((total, area) => {
-            return total + Object.values(area.jobs || {}).flat().length;
-          }, 0);
-
-          // Comparar con los datos anteriores
-          console.log(`Actualización completada:
-            - Total trabajos anteriores: ${currentTotalJobs}
-            - Total trabajos nuevos: ${newTotal}
-            - Diferencia: ${newTotal - currentTotalJobs}
-          `);
-
-          // Verificar cambios por área
-          Object.entries(result).forEach(([area, data]) => {
-            const totalArea = Object.values(data.jobs || {}).flat().length;
-            console.log(`Área ${area}: ${totalArea} trabajos`);
-          });
-
-          // Si hay una celda seleccionada, verificar si aún existe en los nuevos datos
-          if (currentSelectedCell) {
-            const estadoExiste = result[currentSelectedCell.estado];
-            const categoriaExiste = currentSelectedCell.categoria === 'total' || 
-              (estadoExiste?.jobs && estadoExiste.jobs[currentSelectedCell.categoria]?.length > 0);
-
-            if (!estadoExiste || !categoriaExiste) {
-              setSelectedCell(null);
-              console.log('La selección actual ya no existe en los nuevos datos');
-            }
-          }
-
-          return result;
-        }),
-        minDelay
-      ]);
-
-      // Verificar el resultado
-      if (!refreshResult) {
-        throw new Error('No se pudo actualizar los datos');
-      }
-
-      // Actualizar trabajosAgrupados con los nuevos datos
-      const newEstadosOrdenados = Object.entries(refreshResult)
-        .sort(([, a], [, b]) => {
-          const areaA = a.area.toLowerCase();
-          const areaB = b.area.toLowerCase();
-          
-          const prioridadA = AREA_PRIORITY[areaA] || 999;
-          const prioridadB = AREA_PRIORITY[areaB] || 999;
-          
-          return prioridadA - prioridadB;
-        });
-
-      // Recalcular totales después de la actualización
-      const newTotalGeneral = newEstadosOrdenados.reduce((total, [_, data]) => {
-        return total + calcularTotal(data.jobs);
-      }, 0);
-
-      console.log('Actualización completada con éxito. Nuevo total general:', newTotalGeneral);
-      
-    } catch (error) {
-      console.error('Error al actualizar:', error);
-      // Aquí podrías mostrar un toast o notificación de error
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  // Calcular el total de trabajos por estado
-  const calcularTotal = (jobs) => {
-    return DELIVERY_COLUMNS.reduce((total, column) => {
-      return total + (jobs[column.key]?.length || 0);
-    }, 0);
-  };
-
-  // Calcular el total general
-  const totalGeneral = estadosOrdenados.reduce((total, [_, data]) => {
-    return total + calcularTotal(data.jobs);
-  }, 0);
 
   // Función para determinar la categoría de entrega basada en la fecha
   const determinarCategoriaEntrega = (fechaEntrega) => {
