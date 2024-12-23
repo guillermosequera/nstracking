@@ -435,3 +435,33 @@ export async function updateJobAreaAndStatus(jobId, areaChange, statusChange, us
 
   return transactionResult.data;
 }
+
+export const fetchProductionJobs = async () => {
+  try {
+    const timestamp = new Date().getTime();
+    const response = await fetch(`/api/production?t=${timestamp}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Error al obtener los trabajos de producción');
+    }
+
+    const data = await response.json();
+    console.log('Datos de producción recibidos:', {
+      totalEstados: Object.keys(data).length,
+      estados: Object.keys(data)
+    });
+    return data;
+  } catch (error) {
+    console.error('Error en fetchProductionJobs:', error);
+    throw error;
+  }
+};

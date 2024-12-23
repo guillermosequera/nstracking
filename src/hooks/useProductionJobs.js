@@ -1,13 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchProductionJobs } from '@/utils/jobUtils'
 
-export function useProductionJobs() {
+export const useProductionJobs = () => {
   return useQuery({
     queryKey: ['production-jobs'],
     queryFn: async () => {
       console.log('Fetching production jobs...');
-      const data = await fetchProductionJobs();
-      return data;
+      try {
+        const data = await fetchProductionJobs();
+        return data;
+      } catch (error) {
+        console.error('Error fetching production jobs:', error);
+        throw error;
+      }
     },
     retry: 3,
     refetchOnWindowFocus: false,
@@ -23,4 +28,4 @@ export function useProductionJobs() {
       });
     }
   });
-} 
+}; 

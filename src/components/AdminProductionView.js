@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { useProductionJobs } from '@/hooks/useProductionJobs';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
+import { useProductionJobs } from '../hooks/useProductionJobs';
 import {
   Table,
   TableBody,
