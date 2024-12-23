@@ -62,44 +62,41 @@ export default function DelayedJobsList() {
       
       // Ejecutar la actualización y esperar los resultados
       const [refreshResult] = await Promise.all([
-        refetch().then(result => {
-          if (!result || !result.data) {
-            console.log('No se recibieron datos en la actualización');
-            return null;
-          }
-
-          // Comparar con los datos anteriores
-          const newJobsCount = result.data.length || 0;
-          console.log(`Actualización completada:
-            - Trabajos anteriores: ${currentJobsCount}
-            - Trabajos nuevos: ${newJobsCount}
-            - Diferencia: ${newJobsCount - currentJobsCount}
-          `);
-
-          return result;
-        }),
+        refetch(),
         minDelay
       ]);
 
-      // Verificar si los datos se actualizaron
-      if (!refreshResult) {
-        throw new Error('Error al actualizar los datos');
+      // Verificar si los datos se actualizaron correctamente
+      if (!refreshResult || !refreshResult.data) {
+        throw new Error('No se recibieron datos en la actualización');
       }
 
-      if (refreshResult.error) {
-        throw new Error(`Error en la actualización: ${refreshResult.error}`);
-      }
-
-      // Verificar si hubo cambios en los datos
       const newJobs = refreshResult.data;
-      if (!newJobs || newJobs.length === 0) {
-        console.log('No se encontraron trabajos atrasados');
-      } else {
-        console.log(`Se encontraron ${newJobs.length} trabajos atrasados`);
+      const newJobsCount = newJobs.length;
+
+      // Comparar con los datos anteriores
+      console.log(`Actualización completada:
+        - Trabajos anteriores: ${currentJobsCount}
+        - Trabajos nuevos: ${newJobsCount}
+        - Diferencia: ${newJobsCount - currentJobsCount}
+      `);
+
+      // Resetear el contador de páginas si hay cambios significativos
+      if (newJobsCount !== currentJobsCount) {
+        setDisplayCount(ITEMS_PER_PAGE);
+      }
+
+      // Cerrar el trabajo expandido si ya no existe en la nueva lista
+      if (expandedJob) {
+        const jobStillExists = newJobs.some(job => job.id === expandedJob);
+        if (!jobStillExists) {
+          setExpandedJob(null);
+        }
       }
       
     } catch (error) {
       console.error('Error al actualizar:', error);
+      // Aquí podrías mostrar un toast o notificación de error
     } finally {
       setIsRefreshing(false);
     }

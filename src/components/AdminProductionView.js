@@ -129,7 +129,9 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
   const handleRefresh = async () => {
     if (isRefreshing) return;
     
+    // Guardar el estado actual antes de actualizar
     const currentTotalJobs = totalGeneral;
+    const currentSelectedCell = selectedCell;
     
     try {
       setIsRefreshing(true);
@@ -163,6 +165,18 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
             console.log(`Área ${area}: ${totalArea} trabajos`);
           });
 
+          // Si hay una celda seleccionada, verificar si aún existe en los nuevos datos
+          if (currentSelectedCell) {
+            const estadoExiste = result[currentSelectedCell.estado];
+            const categoriaExiste = currentSelectedCell.categoria === 'total' || 
+              (estadoExiste?.jobs && estadoExiste.jobs[currentSelectedCell.categoria]?.length > 0);
+
+            if (!estadoExiste || !categoriaExiste) {
+              setSelectedCell(null);
+              console.log('La selección actual ya no existe en los nuevos datos');
+            }
+          }
+
           return result;
         }),
         minDelay
@@ -172,9 +186,29 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
       if (!refreshResult) {
         throw new Error('No se pudo actualizar los datos');
       }
+
+      // Actualizar trabajosAgrupados con los nuevos datos
+      const newEstadosOrdenados = Object.entries(refreshResult)
+        .sort(([, a], [, b]) => {
+          const areaA = a.area.toLowerCase();
+          const areaB = b.area.toLowerCase();
+          
+          const prioridadA = AREA_PRIORITY[areaA] || 999;
+          const prioridadB = AREA_PRIORITY[areaB] || 999;
+          
+          return prioridadA - prioridadB;
+        });
+
+      // Recalcular totales después de la actualización
+      const newTotalGeneral = newEstadosOrdenados.reduce((total, [_, data]) => {
+        return total + calcularTotal(data.jobs);
+      }, 0);
+
+      console.log('Actualización completada con éxito. Nuevo total general:', newTotalGeneral);
       
     } catch (error) {
       console.error('Error al actualizar:', error);
+      // Aquí podrías mostrar un toast o notificación de error
     } finally {
       setIsRefreshing(false);
     }
