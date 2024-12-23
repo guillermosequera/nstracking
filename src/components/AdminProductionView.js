@@ -127,7 +127,9 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
   };
 
   const handleRefresh = async () => {
-    if (isRefreshing) return; // Prevenir múltiples clicks
+    if (isRefreshing) return;
+    
+    const currentTotalJobs = totalGeneral;
     
     try {
       setIsRefreshing(true);
@@ -138,12 +140,29 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
       // Ejecutar la actualización y esperar los resultados
       const [refreshResult] = await Promise.all([
         onRefresh().then(result => {
-          // Verificar si hay datos nuevos
-          if (!result || (Array.isArray(result) && result.length === 0)) {
-            console.log('No se encontraron cambios en los datos');
-          } else {
-            console.log('Datos actualizados correctamente');
+          if (!result) {
+            console.log('No se recibieron datos en la actualización');
+            return null;
           }
+
+          // Calcular el nuevo total después de la actualización
+          const newTotal = Object.values(result).reduce((total, area) => {
+            return total + Object.values(area.jobs || {}).flat().length;
+          }, 0);
+
+          // Comparar con los datos anteriores
+          console.log(`Actualización completada:
+            - Total trabajos anteriores: ${currentTotalJobs}
+            - Total trabajos nuevos: ${newTotal}
+            - Diferencia: ${newTotal - currentTotalJobs}
+          `);
+
+          // Verificar cambios por área
+          Object.entries(result).forEach(([area, data]) => {
+            const totalArea = Object.values(data.jobs || {}).flat().length;
+            console.log(`Área ${area}: ${totalArea} trabajos`);
+          });
+
           return result;
         }),
         minDelay
@@ -156,7 +175,6 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
       
     } catch (error) {
       console.error('Error al actualizar:', error);
-      // Aquí podrías mostrar un toast o notificación de error
     } finally {
       setIsRefreshing(false);
     }

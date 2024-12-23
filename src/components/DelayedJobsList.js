@@ -50,7 +50,9 @@ export default function DelayedJobsList() {
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   const handleRefresh = async () => {
-    if (isRefreshing) return; // Prevenir múltiples clicks
+    if (isRefreshing) return;
+    
+    const currentJobsCount = jobs?.length || 0;
     
     try {
       setIsRefreshing(true);
@@ -60,21 +62,44 @@ export default function DelayedJobsList() {
       
       // Ejecutar la actualización y esperar los resultados
       const [refreshResult] = await Promise.all([
-        refetch(),
+        refetch().then(result => {
+          if (!result || !result.data) {
+            console.log('No se recibieron datos en la actualización');
+            return null;
+          }
+
+          // Comparar con los datos anteriores
+          const newJobsCount = result.data.length || 0;
+          console.log(`Actualización completada:
+            - Trabajos anteriores: ${currentJobsCount}
+            - Trabajos nuevos: ${newJobsCount}
+            - Diferencia: ${newJobsCount - currentJobsCount}
+          `);
+
+          return result;
+        }),
         minDelay
       ]);
 
       // Verificar si los datos se actualizaron
-      if (refreshResult.error) {
+      if (!refreshResult) {
         throw new Error('Error al actualizar los datos');
       }
 
-      // Opcional: Mostrar un mensaje de éxito
-      console.log('Datos actualizados correctamente:', refreshResult.data?.length || 0, 'trabajos');
+      if (refreshResult.error) {
+        throw new Error(`Error en la actualización: ${refreshResult.error}`);
+      }
+
+      // Verificar si hubo cambios en los datos
+      const newJobs = refreshResult.data;
+      if (!newJobs || newJobs.length === 0) {
+        console.log('No se encontraron trabajos atrasados');
+      } else {
+        console.log(`Se encontraron ${newJobs.length} trabajos atrasados`);
+      }
       
     } catch (error) {
       console.error('Error al actualizar:', error);
-      // Aquí podrías mostrar un toast o notificación de error
     } finally {
       setIsRefreshing(false);
     }
