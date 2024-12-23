@@ -50,15 +50,35 @@ export default function DelayedJobsList() {
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   const handleRefresh = async () => {
+    if (isRefreshing) return; // Prevenir múltiples clicks
+    
     try {
-      setIsRefreshing(true)
-      await refetch()
+      setIsRefreshing(true);
+      
+      // Crear una promesa que se resolverá después de un tiempo mínimo
+      const minDelay = new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Ejecutar la actualización y esperar los resultados
+      const [refreshResult] = await Promise.all([
+        refetch(),
+        minDelay
+      ]);
+
+      // Verificar si los datos se actualizaron
+      if (refreshResult.error) {
+        throw new Error('Error al actualizar los datos');
+      }
+
+      // Opcional: Mostrar un mensaje de éxito
+      console.log('Datos actualizados correctamente:', refreshResult.data?.length || 0, 'trabajos');
+      
     } catch (error) {
-      console.error('Error al actualizar:', error)
+      console.error('Error al actualizar:', error);
+      // Aquí podrías mostrar un toast o notificación de error
     } finally {
-      setIsRefreshing(false)
+      setIsRefreshing(false);
     }
-  }
+  };
 
   const getJobColor = (delayDays) => {
     if (delayDays === 1) return 'bg-slate-800 border-slate-700'
@@ -112,7 +132,7 @@ export default function DelayedJobsList() {
             className="flex items-center gap-2 bg-slate-300 hover:bg-slate-700 text-blue-600 border-slate-600"
           >
             <RefreshCw 
-              className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+              className={`h-4 w-4 ${isRefreshing ? 'animate-spin duration-1000' : ''}`}
             />
             <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
           </Button>
@@ -139,7 +159,7 @@ export default function DelayedJobsList() {
               <div className="flex justify-between items-center text-xl text-gray-100">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{job.number}</span>
-                  <Badge variant="secondary" className="bg-rose-900/70 border border-rose-800">
+                  <Badge variant="secondary" className="bg-rose-900/70  text-yellow-500 border border-rose-800">
                     {job.delayDays} {job.delayDays === 1 ? 'día' : 'días'} de atraso
                   </Badge>
                 </div>

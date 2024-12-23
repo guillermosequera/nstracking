@@ -127,9 +127,36 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
   };
 
   const handleRefresh = async () => {
-    setIsRefreshing(true);
+    if (isRefreshing) return; // Prevenir múltiples clicks
+    
     try {
-      await onRefresh();
+      setIsRefreshing(true);
+      
+      // Crear una promesa que se resolverá después de un tiempo mínimo
+      const minDelay = new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Ejecutar la actualización y esperar los resultados
+      const [refreshResult] = await Promise.all([
+        onRefresh().then(result => {
+          // Verificar si hay datos nuevos
+          if (!result || (Array.isArray(result) && result.length === 0)) {
+            console.log('No se encontraron cambios en los datos');
+          } else {
+            console.log('Datos actualizados correctamente');
+          }
+          return result;
+        }),
+        minDelay
+      ]);
+
+      // Verificar el resultado
+      if (!refreshResult) {
+        throw new Error('No se pudo actualizar los datos');
+      }
+      
+    } catch (error) {
+      console.error('Error al actualizar:', error);
+      // Aquí podrías mostrar un toast o notificación de error
     } finally {
       setIsRefreshing(false);
     }
@@ -186,7 +213,7 @@ export default function AdminProductionView({ trabajosAgrupados, onRefresh }) {
             className="flex items-center gap-2 bg-slate-300 hover:bg-slate-700 text-blue-600 border-slate-600"
           >
             <RefreshCw 
-              className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+              className={`h-4 w-4 ${isRefreshing ? 'animate-spin duration-1000' : ''}`}
             />
             <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
           </Button>
