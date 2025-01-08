@@ -165,4 +165,13 @@ class JobQueue {
   }
 }
 
-export const jobQueue = new JobQueue(); 
+export const jobQueue = typeof window !== 'undefined' ? new JobQueue() : null;
+
+// Función auxiliar para obtener la cola de trabajos
+export const getJobQueue = () => {
+  if (typeof window === 'undefined') {
+    console.warn('JobQueue no está disponible en el servidor');
+    return null;
+  }
+  return jobQueue;
+}; 

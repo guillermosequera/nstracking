@@ -19,6 +19,8 @@ const userNames = {
   'produccion@italoptic.cl': 'Cesar',
   'trentopv@gmail.com': 'Laura C',
   'trentopv2@gmail.com': 'Jimena',
+  'coordinadorcomercial@opticatrento.cl': 'Darwin B',
+  'produccion@italoptic.cl': 'Matías F'
 
 }
 

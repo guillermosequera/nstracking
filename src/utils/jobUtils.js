@@ -203,6 +203,12 @@ export const addJob = async (jobNumber, userEmail, role, activePage, status, max
         throw new Error(errorData.error || 'Failed to add job');
       }
 
+      // Sincronizar con la hoja de estado
+      await syncJobStatus(jobNumber, {
+        area: activePage,
+        status: status || getStatusFromPage(activePage)
+      }, userEmail);
+
       return await response.json();
     } catch (error) {
       console.error(`Error en intento ${attempt + 1}:`, error);
@@ -212,7 +218,6 @@ export const addJob = async (jobNumber, userEmail, role, activePage, status, max
         throw error;
       }
       
-      // Esperar antes de reintentar
       await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
     }
   }
@@ -463,5 +468,39 @@ export const fetchProductionJobs = async () => {
   } catch (error) {
     console.error('Error en fetchProductionJobs:', error);
     throw error;
+  }
+};
+
+export const syncJobStatus = async (jobNumber, currentStatus, userEmail) => {
+  try {
+    const auth = await getAuthClient();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const timestamp = new Date().toISOString();
+    
+    // Verificar si ya existe en la hoja de estado
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetIds.status,
+      range: 'A:E',
+    });
+    
+    const rows = response.data.values || [];
+    const existingRow = rows.find(row => row[0] === jobNumber);
+    
+    if (!existingRow) {
+      // Si no existe, agregar el estado
+      const values = [[jobNumber, timestamp, currentStatus.area, currentStatus.status, userEmail]];
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: sheetIds.status,
+        range: 'A:E',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values },
+      });
+      console.log(`Estado sincronizado para trabajo ${jobNumber}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error en syncJobStatus:', error);
+    return false;
   }
 };

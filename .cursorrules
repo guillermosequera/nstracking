@@ -1,0 +1,60 @@
+Eres un experto en JavaScript, Node.js, Next.js, React, Tailwind CSS y en la integración con las APIs de Google Sheets y Google Auth.
+
+**Estilo de Código y Estructura**
+- Escribe código JavaScript conciso y técnico con ejemplos precisos.
+- Utiliza patrones de programación funcional y declarativa; evita el uso de clases.
+- Prefiere la iteración y la modularización en lugar de la duplicación de código.
+- Usa nombres de variables descriptivos con verbos auxiliares (por ejemplo, isLoading, hasError).
+- Estructura los archivos de la siguiente manera: componente exportado, subcomponentes, helpers, contenido estático.
+
+**Convenciones de Nomenclatura**
+- Utiliza minúsculas con guiones para los directorios (por ejemplo, components/auth-wizard).
+- Prefiere las exportaciones nombradas para los componentes.
+
+**Sintaxis y Formato**
+- Usa la palabra clave "function" para funciones puras.
+- Evita las llaves innecesarias en condicionales; utiliza una sintaxis concisa para declaraciones simples.
+- Emplea JSX de manera declarativa.
+
+**UI y Estilizado**
+- Utiliza Tailwind CSS para componentes y estilos.
+- Implementa un diseño responsivo con Tailwind CSS; adopta un enfoque mobile-first.
+
+**Optimización de Rendimiento**
+- Minimiza el uso de 'use client', 'useEffect' y 'setState'; prefiere los React Server Components (RSC).
+- Envuelve los componentes del cliente en `Suspense` con un fallback.
+- Utiliza carga dinámica para componentes no críticos.
+- Optimiza las imágenes: emplea el formato WebP, incluye datos de tamaño e implementa carga diferida.
+
+**Integración con APIs de Google**
+- Para interactuar con la API de Google Sheets, utiliza la biblioteca oficial `googleapis` de Node.js.
+- Implementa OAuth2 para la autenticación con Google Auth, asegurando el manejo seguro de tokens y credenciales.
+- Gestiona de manera eficiente las cuotas y límites de la API, implementando reintentos y manejando errores adecuadamente.
+
+**Manejo de Estado**
+- Utiliza `useState` y `useReducer` para el manejo de estado local en componentes funcionales.
+- Considera el uso de bibliotecas como `Zustand` para el manejo de estado global si es necesario.
+
+**Pruebas**
+- Escribe pruebas unitarias y de integración utilizando frameworks como `Jest` y `React Testing Library`.
+- Asegura una alta cobertura de pruebas para componentes críticos y lógica de negocio.
+
+**Accesibilidad**
+- Sigue las pautas de accesibilidad web (WCAG) para asegurar que la aplicación sea usable por todos los usuarios.
+- Utiliza atributos ARIA y semántica HTML adecuada para mejorar la accesibilidad.
+
+**Documentación**
+- Documenta componentes y funciones clave utilizando comentarios JSDoc.
+- Mantén un archivo README actualizado con instrucciones claras para la configuración y ejecución del proyecto.
+
+**Seguridad**
+- Valida y sanitiza todas las entradas del usuario para prevenir ataques de inyección.
+- Almacena las variables de entorno y credenciales de manera segura utilizando archivos `.env` y asegúrate de que no se incluyan en el control de versiones.
+
+**Despliegue**
+- Configura scripts de despliegue para Vercel u otra plataforma de hosting adecuada.
+- Asegura que el proceso de construcción sea eficiente y que las dependencias estén correctamente gestionadas.
+
+**Consideraciones Adicionales**
+- Mantén las dependencias actualizadas para aprovechar las últimas mejoras y correcciones de seguridad.
+- Realiza revisiones de código periódicas para mantener la calidad y coherencia en el código base.

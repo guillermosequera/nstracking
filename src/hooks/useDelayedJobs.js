@@ -1,3 +1,5 @@
+// nstracking/src/hooks/useDelayedJobs.js
+
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchDelayedJobs } from '@/utils/jobUtils'
 
@@ -11,10 +13,14 @@ export function useDelayedJobs() {
     retry: 1,
     staleTime: 5 * 60 * 1000, // 5 minutos antes de considerar los datos obsoletos
     cacheTime: 10 * 60 * 1000, // 10 minutos de caché
-    refetchOnWindowFocus: true, // Permitir actualización al volver a la ventana
+    refetchOnWindowFocus: false, // Desactivamos la actualización automática al volver a la ventana
     refetchOnMount: true, // Actualizar al montar el componente
     onError: (error) => {
       console.error('Error en useDelayedJobs:', error)
+    },
+    select: (data) => {
+      if (!data) return []
+      return data
     }
   })
 
@@ -24,14 +30,14 @@ export function useDelayedJobs() {
       // Primero invalidamos la query actual
       await queryClient.invalidateQueries({
         queryKey: ['delayedJobs'],
-        refetchType: 'active', // Solo recargar queries activas
+        refetchType: 'active',
       })
 
       // Forzamos una nueva obtención de datos
       const result = await queryClient.fetchQuery({
         queryKey: ['delayedJobs'],
         queryFn: fetchDelayedJobs,
-        staleTime: 0, // Forzar obtención de datos frescos
+        staleTime: 0,
       })
 
       // Actualizamos el cache con los nuevos datos
@@ -46,6 +52,8 @@ export function useDelayedJobs() {
 
   return {
     ...query,
-    refetch
+    refetch,
+    isLoading: query.isLoading, // Solo usamos isLoading, no combinamos con isFetching
+    error: query.error
   }
 } 

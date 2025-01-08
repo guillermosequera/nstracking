@@ -1,29 +1,17 @@
+// /app/api/production/route.js
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getAuthClient } from '@/utils/googleAuth';
 import { sheetIds } from '@/config/roles';
-
-function categorizarFechaEntrega(fechaEntrega) {
-  if (!fechaEntrega) return null;
-
-  const fechaParsed = new Date(fechaEntrega);
-  if (isNaN(fechaParsed.getTime())) return null;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const diffDays = Math.floor((fechaParsed - today) / (1000 * 60 * 60 * 24));
-
-  if (diffDays < -10) return 'moreThan10Days';
-  if (diffDays < -6) return 'moreThan6Days';
-  if (diffDays < -2) return 'moreThan2Days';
-  if (diffDays === -2) return 'twoDays';
-  if (diffDays === -1) return 'oneDay';
-  if (diffDays === 0) return 'today';
-  if (diffDays === 1) return 'tomorrow';
-  if (diffDays === 2) return 'dayAfterTomorrow';
-  return '3DaysOrMore';
-}
+import { 
+  procesarFecha, 
+  procesarHistorialTrabajos,
+  filtrarTrabajosPorEstado,
+  categorizarFechaEntrega,
+  obtenerFechaEntregaDigitacion,
+  calcularDiasHabilesEntreFechas,
+  calcularDiasHabilesAtraso
+} from '../job-processing/route'
 
 export async function GET(request) {
   try {
@@ -39,74 +27,88 @@ export async function GET(request) {
     const rows = response.data.values || [];
     if (rows.length <= 1) return NextResponse.json({});
 
-    const trabajosEnDespacho = new Set();
-    const trabajosDigitacion = new Map();
+    console.log('\n=== INICIO PROCESAMIENTO DE TRABAJOS ===');
+    console.log(`Total de filas en la hoja: ${rows.length}`);
 
-    // Una sola pasada por los datos - O(n)
-    for (let i = 1; i < rows.length; i++) {
-      const [numero, fecha, area, estado, usuario, fechaEntrega] = rows[i];
-      if (!numero) continue;
+    // Procesamos el historial usando la función común
+    const historialTrabajos = procesarHistorialTrabajos(rows);
+    console.log(`Total de trabajos únicos: ${historialTrabajos.size}`);
 
-      // Convertir fecha una sola vez
-      const fechaObj = new Date(fecha);
-      const timestamp = fechaObj.getTime();
+    // Filtramos los trabajos usando la función común
+    const trabajosFiltrados = filtrarTrabajosPorEstado(historialTrabajos)
+      .map(([numeroTrabajo, historial]) => {
+        if (!numeroTrabajo) {
+          console.log('Se encontró un trabajo sin número durante el mapeo final')
+          return null
+        }
 
-      if (estado === 'En despacho' || estado === 'Despacho - En despacho') {
-        trabajosEnDespacho.add(numero);
-        continue;
-      }
+        // Obtener el último estado
+        const estadoActual = historial
+          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
 
-      if (!trabajosDigitacion.has(numero)) {
-        trabajosDigitacion.set(numero, {
-          fechaEntrega,
-          tieneDigitacion: false,
-          ultimoEstado: { fecha: timestamp, area, estado, usuario },
-          primerRegistro: { fecha, usuario },
-          estados: []
-        });
-      }
+        // Obtener la fecha de entrega del estado Digitacion
+        const fechaEntregaDigitacion = obtenerFechaEntregaDigitacion(historial);
+        
+        // Procesar fechas usando la función común
+        const fechaIngreso = procesarFecha(estadoActual.fecha, numeroTrabajo);
+        const fechaEntrega = procesarFecha(fechaEntregaDigitacion, numeroTrabajo);
 
-      const info = trabajosDigitacion.get(numero);
-      
-      // Actualizar último estado si la fecha es más reciente
-      if (timestamp > new Date(info.ultimoEstado.fecha).getTime()) {
-        info.ultimoEstado = { fecha: timestamp, area, estado, usuario };
-      }
+        // Calcular días hábiles de atraso (usando la misma lógica que delayed-jobs)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-      info.estados.push({ fecha, area, estado, usuario });
+        const diasHabilesAtraso = fechaEntrega ? 
+          calcularDiasHabilesAtraso(fechaEntrega.fechaParaProcesar, today) : 
+          null;
 
-      if (estado === 'Digitacion') {
-        info.tieneDigitacion = true;
-      }
-    }
+        return {
+          id: numeroTrabajo,
+          number: numeroTrabajo,
+          entryDate: fechaIngreso?.fechaParaMostrar,
+          deliveryDate: fechaEntrega?.fechaParaMostrar,
+          fechaParaProcesar: fechaEntrega?.fechaParaProcesar,
+          diasHabilesAtraso,
+          user: estadoActual.usuario,
+          status: estadoActual.estado,
+          historial: historial.map(registro => ({
+            ...registro,
+            numeroTrabajo,
+            fecha: procesarFecha(registro.fecha, numeroTrabajo)?.fechaParaMostrar
+          }))
+        };
+      })
+      .filter(trabajo => trabajo !== null);
 
-    // Procesar y agrupar trabajos - O(n)
+    // Agrupar por estado y categoría
     const trabajosAgrupados = {};
 
-    trabajosDigitacion.forEach((info, numero) => {
-      // Verificar si algún estado en el historial es "Digitacion"
-      const tuvoDigitacion = info.estados.some(estado => estado.estado === 'Digitacion');
-      
-      // Verificar si algún estado en el historial es despacho
-      const tuvoDespacho = info.estados.some(estado => 
-        estado.estado === 'En despacho' || estado.estado === 'Despacho - En despacho'
-      );
-      
-      if (!tuvoDigitacion || tuvoDespacho) return;
+    trabajosFiltrados.forEach(trabajo => {
+      if (!trabajo.number) {
+        console.log('Se encontró un trabajo sin número durante el agrupamiento:', trabajo)
+        return
+      }
 
-      const categoria = categorizarFechaEntrega(info.fechaEntrega);
-      if (!categoria) return;
+      // Determinar categoría basada en días de atraso
+      let categoria;
+      const diasAtraso = trabajo.diasHabilesAtraso;
 
-      const trabajo = {
-        number: numero,
-        entryDate: info.primerRegistro.fecha,
-        deliveryDate: info.fechaEntrega,
-        user: info.ultimoEstado.usuario,
-        status: info.ultimoEstado.estado,
-        historial: info.estados
-      };
+      if (diasAtraso === null) {
+        console.log(`No se pudo determinar los días de atraso para el trabajo ${trabajo.number}`);
+        return;
+      }
 
-      const { estado, area } = info.ultimoEstado;
+      if (diasAtraso > 10) categoria = 'moreThan10Days';
+      else if (diasAtraso > 6) categoria = 'moreThan6Days';
+      else if (diasAtraso > 2) categoria = 'moreThan2Days';
+      else if (diasAtraso === 2) categoria = 'twoDays';
+      else if (diasAtraso === 1) categoria = 'oneDay';
+      else if (diasAtraso === 0) categoria = 'today';
+      else if (diasAtraso === -1) categoria = 'tomorrow';
+      else if (diasAtraso === -2) categoria = 'dayAfterTomorrow';
+      else categoria = '3DaysOrMore';
+
+      const { status: estado } = trabajo;
+      const area = trabajo.historial[0].area;
 
       if (!trabajosAgrupados[estado]) {
         trabajosAgrupados[estado] = {

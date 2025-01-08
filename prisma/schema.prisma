@@ -1,0 +1,22 @@
+// ... existing models ...
+
+model PendingTransaction {
+  id          String      @id @default(cuid())
+  jobId       String
+  userId      String
+  areaChange  String?
+  statusChange String?
+  startedAt   DateTime
+  completedAt DateTime?
+  status      TransactionStatus
+  createdAt   DateTime    @default(now())
+  
+  job         Job         @relation(fields: [jobId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+} 

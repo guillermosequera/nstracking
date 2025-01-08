@@ -4,10 +4,16 @@ import './globals.css'
 import { Providers } from '@/components/Providers'
 import Navbar from '@/components/Navbar'
 import dynamic from 'next/dynamic'
+import { syncScheduler } from '@/services/syncScheduler'
 
 const ErrorBoundary = dynamic(() => import('@/components/ErrorBoundary'), {
   ssr: false
 })
+
+// Iniciar el programador solo en el lado del cliente
+if (typeof window !== 'undefined') {
+  syncScheduler.start()
+}
 
 export default function RootLayout({ children }) {
   return (

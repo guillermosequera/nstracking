@@ -1,7 +1,11 @@
+// nstracking/src/components/AdminProductionView.js
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { useProductionJobs } from '../hooks/useProductionJobs';
+import { useDate } from '@/hooks/useDate';
+import { DATE_FORMATS } from '@/hooks/useDate/constants';
 import {
   Table,
   TableBody,
@@ -16,87 +20,79 @@ import { RefreshCw } from 'lucide-react';
 import ProductionJobsList from './ProductionJobsList';
 import LoadingState from '@/components/LoadingState';
 import ErrorState from '@/components/ErrorState';
-
-// Función para procesar fechas similar a delayed-jobs
-function procesarFecha(fechaOriginal, numeroTrabajo) {
-  if (!fechaOriginal) {
-    console.log(`Trabajo ${numeroTrabajo}: Fecha vacía o nula`);
-    return null;
-  }
-
-  // Asegurarnos de que la fecha se interprete como UTC
-  const fechaParsed = new Date(fechaOriginal);
-  const fechaUTC = new Date(Date.UTC(
-    fechaParsed.getUTCFullYear(),
-    fechaParsed.getUTCMonth(),
-    fechaParsed.getUTCDate(),
-    fechaParsed.getUTCHours(),
-    fechaParsed.getUTCMinutes(),
-    fechaParsed.getUTCSeconds()
-  ));
-  
-  if (!isNaN(fechaUTC.getTime())) {
-    return {
-      fechaParaProcesar: fechaUTC,
-      fechaParaMostrar: fechaUTC.toISOString(),
-      fechaFormateada: `${String(fechaUTC.getUTCDate()).padStart(2, '0')}-${String(fechaUTC.getUTCMonth() + 1).padStart(2, '0')}-${fechaUTC.getUTCFullYear()}`
-    };
-  }
-  
-  console.log(`Trabajo ${numeroTrabajo}: Fecha inválida:`, fechaOriginal);
-  return null;
-}
-
-// Función para calcular días hábiles entre fechas
-function calcularDiasHabilesEntreFechas(fechaInicio, fechaFin) {
-  let diasHabiles = 0;
-  
-  // Asegurarnos de que ambas fechas estén en UTC y al inicio del día
-  const fechaInicioUTC = new Date(Date.UTC(
-    fechaInicio.getUTCFullYear(),
-    fechaInicio.getUTCMonth(),
-    fechaInicio.getUTCDate()
-  ));
-  
-  const fechaFinUTC = new Date(Date.UTC(
-    fechaFin.getUTCFullYear(),
-    fechaFin.getUTCMonth(),
-    fechaFin.getUTCDate()
-  ));
-  
-  const currentDate = new Date(fechaInicioUTC);
-  
-  while (currentDate <= fechaFinUTC) {
-    const dia = currentDate.getUTCDay();
-    if (dia !== 0 && dia !== 6) { // 0 = Domingo, 6 = Sábado
-      diasHabiles++;
-    }
-    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-  }
-
-  return diasHabiles;
-}
+import SyncControl from '@/components/SyncControl';
 
 const DELIVERY_COLUMNS = [
-  { key: 'moreThan10Days', label: 'Más de 10 días', colorClass: 'text-red-500', dias: 10 },
-  { key: 'moreThan6Days', label: 'Más de 6 días', colorClass: 'text-orange-500', dias: 6 },
-  { key: 'moreThan2Days', label: 'Más de 2 días', colorClass: 'text-yellow-500', dias: 2 },
-  { key: 'twoDays', label: 'Dos dias', colorClass: 'text-green-500', dias: 2 },
-  { key: 'oneDay', label: 'Un día', colorClass: 'text-green-500', dias: 1 },
-  { key: 'today', label: 'Hoy', colorClass: 'text-green-500', dias: 0 },
-  { key: 'tomorrow', label: 'Para mañana', colorClass: 'text-green-500', dias: -1 },
-  { key: 'dayAfterTomorrow', label: 'Para pasado mañana', colorClass: 'text-green-500', dias: -2 },
-  { key: '3DaysOrMore', label: 'Para 3 días o más', colorClass: 'text-green-500', dias: -3 }
+  { key: 'moreThan10Days', label: '+ 10 días', colorClass: 'text-red-200', bgColorClass: 'bg-red-400', dias: 10 },
+  { key: 'moreThan6Days', label: '+ 6 días', colorClass: 'text-orange-500', bgColorClass: 'bg-red-300', dias: 6 },
+  { key: 'moreThan2Days', label: '+ 2 días', colorClass: 'text-yellow-600', bgColorClass: 'bg-red-200', dias: 2 },
+  { key: 'twoDays', label: 'Dos dias', colorClass: 'text-yellow-700', bgColorClass: 'bg-orange-200', dias: 2 },
+  { key: 'oneDay', label: 'Un día', colorClass: 'text-green-600', bgColorClass: 'bg-yellow-100', dias: 1 },
+  { key: 'today', label: 'Hoy', colorClass: 'text-green-600', bgColorClass: 'bg-yellow-50', dias: 0 },
+  { key: 'tomorrow', label: 'Mañana', colorClass: 'text-green-700', bgColorClass: 'bg-green-100', dias: -1 },
+  { key: 'dayAfterTomorrow', label: '+ 2 días', colorClass: 'text-green-800', bgColorClass: 'bg-green-50', dias: -2 },
+  { key: '3DaysOrMore', label: '+ 3 dias', colorClass: 'text-gray-600', bgColorClass: 'bg-emerald-50', dias: -3 }
 ];
 
-const AREA_PRIORITY = {
-  commerce: 1,
-  warehouse: 2,
-  labs: 3,
-  labsMineral: 4,
-  labsAR: 5,
-  montage: 6,
-  quality: 7
+const STATE_PRIORITY = {
+
+  // Comercial
+  "Digitacion": 1,
+
+  // Bodega
+  "Bodega - Compras por quiebre": 2,
+  "Bodega - Picking": 2,
+  "Bodega - Stock armazon": 3,
+  "Bodega - NV quiebre sin compra": 4,
+  "Bodega - Quiebre por armazon": 4,
+  "Fuera de Bodega": 5,
+  
+  
+  // Laboratorio
+  "Laboratorio - Superficie polimeros": 8,
+  "Laboratorio - Superficie mineral": 9,
+  "Laboratorio - Tratamiento": 10,
+  "Laboratorio - Tratamiento AR": 11,
+  "Laboratorio - Teñido": 12,
+  "Laboratorio - Reparacion mineral": 13,
+  "Laboratorio - Enviado a AR": 14,
+  "Laboratorio - Recibido de AR": 15,
+  
+  // Montaje
+  "Montaje - Montaje": 16,
+  "Montaje - Reparacion": 16,
+  "Fuera de Montaje": 17,
+
+  // Control Calidad
+  "Control Calidad - Control calidad": 18,
+  "Garantia": 18,
+  "fuera_de_control_de_calidad": 18,
+
+  // Merma
+  "Merma - Merma antireflejo": 19,
+  "Merma - Merma laboratorio": 19,
+  "Merma - Merma teñido": 19,
+  "Merma - Merma Montaje": 19,
+  "Merma - Merma bodega": 19,
+  "Merma - Merma comercial": 19,
+  "merma_comercial": 19,
+  "Merma - Merma material": 19,
+  "Merma - Merma proveedor": 19,
+  "Merma - Merma sistema": 19,
+  
+  // Despacho
+  "En despacho": 20,
+  "Fuera de Despacho": 20,
+  "Despacho - En despacho": 20,
+  "Despacho - Despachado": 20,
+  
+  // Tienda
+  "Recepcion tienda": 21,
+  "Entregado al cliente": 21,
+
+
+  // Otros
+  "Estado Desconocido": 30
 };
 
 export default function AdminProductionView() {
@@ -104,18 +100,124 @@ export default function AdminProductionView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const queryClient = useQueryClient();
   const { data: session } = useSession();
-
+  const { parseDate, formatDate, toChileTime } = useDate();
   const { data: trabajosAgrupados = {}, isLoading, error, refetch } = useProductionJobs();
 
-  // Ordenar estados por área
+  // Función para determinar la categoría de entrega basada en días hábiles
+  const determinarCategoriaEntrega = useCallback((trabajo) => {
+    if (!trabajo || trabajo.diasHabilesAtraso === undefined || trabajo.diasHabilesAtraso === null) {
+      console.log(`No se puede determinar categoría para trabajo ${trabajo?.number}: sin días de atraso`);
+      return null;
+    }
+
+    const diasAtraso = trabajo.diasHabilesAtraso;
+    console.log(`Determinando categoría para trabajo ${trabajo.number}: ${diasAtraso} días de atraso`);
+
+    // Categorías para trabajos atrasados (días positivos)
+    if (diasAtraso > 10) return 'moreThan10Days';
+    if (diasAtraso > 6) return 'moreThan6Days';
+    if (diasAtraso > 2) return 'moreThan2Days';
+    if (diasAtraso === 2) return 'twoDays';
+    if (diasAtraso === 1) return 'oneDay';
+    
+    // Categoría para el día actual
+    if (diasAtraso === 0) return 'today';
+    
+    // Categorías para trabajos futuros (días negativos)
+    if (diasAtraso === -1) return 'tomorrow';
+    if (diasAtraso === -2) return 'dayAfterTomorrow';
+    if (diasAtraso < -2) return '3DaysOrMore';
+    
+    // Si por alguna razón no cae en ninguna categoría
+    console.log(`Trabajo ${trabajo.number}: No se pudo categorizar (${diasAtraso} días)`);
+    return null;
+  }, []);
+
+  // Procesar y categorizar trabajos
+  const trabajosProcesados = useMemo(() => {
+    const resultado = {};
+    
+    Object.entries(trabajosAgrupados).forEach(([estado, data]) => {
+      if (!resultado[estado]) {
+        resultado[estado] = {
+          area: data.area,
+          jobs: {}
+        };
+      }
+
+      // Inicializar todas las categorías
+      DELIVERY_COLUMNS.forEach(column => {
+        resultado[estado].jobs[column.key] = [];
+      });
+
+      // Procesar cada trabajo
+      Object.values(data.jobs).flat().forEach(trabajo => {
+        const categoria = determinarCategoriaEntrega(trabajo);
+        if (categoria) {
+          resultado[estado].jobs[categoria].push({
+            ...trabajo,
+            // Mantener los campos originales sin reprocesar
+            id: trabajo.id,
+            number: trabajo.number,
+            deliveryDate: trabajo.deliveryDate,
+            entryDate: trabajo.entryDate,
+            diasHabiles: trabajo.diasHabiles
+          });
+        }
+      });
+    });
+
+    return resultado;
+  }, [trabajosAgrupados, determinarCategoriaEntrega]);
+
+  // Función para procesar fechas
+  const processDate = useCallback((dateString) => {
+    if (!dateString) return null;
+    const result = parseDate(dateString);
+    if (result.error) return null;
+    return result.date;
+  }, [parseDate]);
+
+  // Función para formatear fechas
+  const formatDateDisplay = useCallback((dateString, includeTime = true) => {
+    if (!dateString) {
+      return 'Fecha no disponible';
+    }
+    
+    let dateToFormat = dateString;
+    
+    // Si la fecha viene en formato ISO
+    if (dateString.includes('T')) {
+      const result = parseDate(dateString);
+      if (result.error) return 'Fecha inválida';
+      dateToFormat = result.date;
+    }
+    // Si la fecha viene en formato DD-MM-YYYY o DD/MM/YYYY
+    else if (dateString.includes('-') || dateString.includes('/')) {
+      const separator = dateString.includes('-') ? '-' : '/';
+      const [day, month, year] = dateString.split(separator);
+      if (day && month && year) {
+        const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
+        const result = parseDate(isoDate);
+        if (result.error) return 'Fecha inválida';
+        dateToFormat = result.date;
+      }
+    }
+    
+    const chileDate = toChileTime(dateToFormat);
+    if (!chileDate) return 'Error de zona horaria';
+    
+    const formatted = formatDate(chileDate, includeTime ? DATE_FORMATS.DISPLAY_WITH_TIME : DATE_FORMATS.DISPLAY_DATE_ONLY);
+    if (!formatted) return 'Error de formato';
+    
+    return formatted;
+  }, [parseDate, formatDate, toChileTime]);
+
+  // Ordenar estados por prioridad
   const estadosOrdenados = Object.entries(trabajosAgrupados)
-    .sort(([, a], [, b]) => {
-      const areaA = a.area.toLowerCase();
-      const areaB = b.area.toLowerCase();
-      
-      const prioridadA = AREA_PRIORITY[areaA] || 999;
-      const prioridadB = AREA_PRIORITY[areaB] || 999;
-      
+    .sort(([estadoA], [estadoB]) => {
+      const prioridadA = STATE_PRIORITY[estadoA] || 999;
+      const prioridadB = STATE_PRIORITY[estadoB] || 999;
       return prioridadA - prioridadB;
     });
 
@@ -142,41 +244,34 @@ export default function AdminProductionView() {
     try {
       setIsRefreshing(true);
       
-      // Crear una promesa que se resolverá después de un tiempo mínimo
       const minDelay = new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Ejecutar la actualización y esperar los resultados
       const [refreshResult] = await Promise.all([
         refetch(),
         minDelay
       ]);
 
-      // Verificar si los datos se actualizaron correctamente
       if (!refreshResult || !refreshResult.data) {
         throw new Error('No se recibieron datos en la actualización');
       }
 
       const newData = refreshResult.data;
       
-      // Calcular el nuevo total después de la actualización
-      const newTotal = Object.values(newData).reduce((total, area) => {
-        return total + Object.values(area.jobs || {}).flat().length;
+      const newTotal = Object.entries(newData).reduce((total, [_, data]) => {
+        return total + calcularTotal(data.jobs);
       }, 0);
 
-      // Comparar con los datos anteriores
       console.log(`Actualización completada:
         - Total trabajos anteriores: ${currentTotalJobs}
         - Total trabajos nuevos: ${newTotal}
         - Diferencia: ${newTotal - currentTotalJobs}
       `);
 
-      // Verificar cambios por área
       Object.entries(newData).forEach(([area, data]) => {
-        const totalArea = Object.values(data.jobs || {}).flat().length;
+        const totalArea = calcularTotal(data.jobs);
         console.log(`Área ${area}: ${totalArea} trabajos`);
       });
 
-      // Si hay una celda seleccionada, verificar si aún existe en los nuevos datos
       if (currentSelectedCell) {
         const estadoExiste = newData[currentSelectedCell.estado];
         const categoriaExiste = currentSelectedCell.categoria === 'total' || 
@@ -193,16 +288,7 @@ export default function AdminProductionView() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [isRefreshing, totalGeneral, selectedCell, refetch]);
-
-  // Auto-refresh cada 5 minutos
-  useEffect(() => {
-    const interval = setInterval(() => {
-      handleRefresh();
-    }, 300000); // 5 minutos
-
-    return () => clearInterval(interval);
-  }, [handleRefresh]);
+  }, [isRefreshing, totalGeneral, selectedCell, refetch, calcularTotal]);
 
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState error={error} />;
@@ -223,124 +309,113 @@ export default function AdminProductionView() {
     );
   };
 
-  // Función para determinar la categoría de entrega basada en la fecha
-  const determinarCategoriaEntrega = (fechaEntrega) => {
-    const fechaProcesada = procesarFecha(fechaEntrega);
-    if (!fechaProcesada) return null;
-
-    const today = new Date();
-    const todayUTC = new Date(Date.UTC(
-      today.getUTCFullYear(),
-      today.getUTCMonth(),
-      today.getUTCDate()
-    ));
-
-    const diasHabiles = calcularDiasHabilesEntreFechas(todayUTC, fechaProcesada.fechaParaProcesar);
-
-    // Determinar categoría basada en días hábiles
-    if (diasHabiles > 10) return 'moreThan10Days';
-    if (diasHabiles > 6) return 'moreThan6Days';
-    if (diasHabiles > 2) return 'moreThan2Days';
-    if (diasHabiles === 2) return 'twoDays';
-    if (diasHabiles === 1) return 'oneDay';
-    if (diasHabiles === 0) return 'today';
-    if (diasHabiles === -1) return 'tomorrow';
-    if (diasHabiles === -2) return 'dayAfterTomorrow';
-    return '3DaysOrMore';
-  };
-
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-blue-600">Trabajos en Producción</h1>
-          <Button
-            onClick={handleRefresh}
-            variant="outline"
-            size="sm"
-            disabled={isRefreshing}
-            className="flex items-center gap-2 bg-slate-300 hover:bg-slate-700 text-blue-600 border-slate-600"
-          >
-            <RefreshCw 
-              className={`h-4 w-4 ${isRefreshing ? 'animate-spin duration-1000' : ''}`}
-            />
-            <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
-          </Button>
+    <div className="w-full max-w-[95vw] mx-auto space-y-4 p-2 sm:p-4 md:p-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <h1 className="text-xl sm:text-2xl font-bold text-blue-600">Trabajos en Producción</h1>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleRefresh}
+              variant="outline"
+              size="sm"
+              disabled={isRefreshing}
+              className="flex items-center gap-2 bg-slate-300 hover:bg-slate-700 text-blue-600 border-slate-600"
+            >
+              <RefreshCw 
+                className={`h-3 w-3 sm:h-4 sm:w-4 ${isRefreshing ? 'animate-spin duration-1000' : ''}`}
+              />
+              <span className="text-xs sm:text-sm">{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
+            </Button>
+            {/* <SyncControl variant="minimal" className="hidden"/> */}
+          </div>
         </div>
-        <div className="text-sm text-blue-500">
+        <div className="text-xs sm:text-sm text-blue-500">
           Total de trabajos: {totalGeneral}
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <Table>
+      <div className="w-full overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+        <Table className="w-full table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="bg-gray-400 sticky left-0 z-10">Estado</TableHead>
+              <TableHead className="bg-gray-400 sticky left-0 z-20 whitespace-nowrap w-[220px] text-xs sm:text-sm py-2">
+                Estado
+              </TableHead>
               {DELIVERY_COLUMNS.map((column) => (
                 <TableHead 
                   key={column.key} 
-                  className={`${column.colorClass} whitespace-nowrap bg-gray-400 text-center text-black`}
+                  className="bg-white whitespace-nowrap text-center font-semibold text-xs sm:text-sm w-[90px] py-2 text-gray-500"
                 >
                   {column.label}
                 </TableHead>
               ))}
-              <TableHead className="bg-blue-100 text-blue-800 font-bold text-center">
+              <TableHead className="bg-white text-blue-800 font-bold text-center text-xs sm:text-sm w-[70px] py-2">
                 Total
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {estadosOrdenados.map(([estado, data]) => {
-              const totalEstado = calcularTotal(data.jobs);
-              return (
-                <TableRow key={estado}>
-                  <TableCell className="font-medium sticky left-0 bg-gray-300 z-10">
-                    <div className="flex items-center gap-2">
-                      <span>{estado}</span>
-                      <Badge variant="secondary" className="hidden">
-                        {data.area}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  {DELIVERY_COLUMNS.map((column) => {
-                    const trabajos = data.jobs[column.key] || [];
-                    return (
-                      <TableCell 
-                        key={column.key}
-                        className={`text-center cursor-pointer hover:bg-blue-300 ${
-                          trabajos.length > 0 ? column.colorClass : 'text-gray-400'
-                        } ${
-                          selectedCell?.estado === estado && selectedCell?.categoria === column.key
-                            ? 'bg-gray-200'
-                            : ''
-                        }`}
-                        onClick={() => handleCellClick(estado, column.key)}
-                      >
-                        {trabajos.length}
-                      </TableCell>
-                    );
-                  })}
-                  <TableCell 
-                    className={`text-center font-bold text-blue-800 bg-blue-50 cursor-pointer hover:bg-blue-100 ${
-                      selectedCell?.estado === estado && selectedCell?.categoria === 'total'
-                        ? 'bg-blue-100'
-                        : ''
-                    }`}
-                    onClick={() => handleTotalClick(estado)}
-                  >
-                    {totalEstado}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            {Object.entries(trabajosProcesados)
+              .sort(([estadoA], [estadoB]) => {
+                const prioridadA = STATE_PRIORITY[estadoA] || 999;
+                const prioridadB = STATE_PRIORITY[estadoB] || 999;
+                return prioridadA - prioridadB;
+              })
+              .map(([estado, data]) => {
+                const totalEstado = calcularTotal(data.jobs);
+                return (
+                  <TableRow key={estado}>
+                    <TableCell className="font-medium sticky left-0 bg-gray-300 z-10 text-xs sm:text-sm whitespace-nowrap py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span>{estado}</span>
+                        <Badge variant="secondary" className="hidden">
+                          {data.area}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    {DELIVERY_COLUMNS.map((column) => {
+                      const trabajos = data.jobs[column.key] || [];
+                      return (
+                        <TableCell 
+                          key={column.key}
+                          className={`text-center cursor-pointer hover:bg-opacity-75 text-xs sm:text-sm py-1.5 ${
+                            column.bgColorClass
+                          } ${
+                            column.colorClass
+                          } ${
+                            trabajos.length > 0 ? 'font-semibold' : ''
+                          } ${
+                            selectedCell?.estado === estado && selectedCell?.categoria === column.key
+                              ? 'ring-2 ring-blue-400 ring-inset'
+                              : ''
+                          }`}
+                          onClick={() => handleCellClick(estado, column.key)}
+                        >
+                          {trabajos.length > 0 ? trabajos.length : ''}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell 
+                      className={`text-center font-bold text-blue-800 bg-white cursor-pointer hover:bg-blue-50 text-xs sm:text-sm py-1.5 ${
+                        selectedCell?.estado === estado && selectedCell?.categoria === 'total'
+                          ? 'ring-2 ring-blue-400 ring-inset'
+                          : ''
+                      }`}
+                      onClick={() => handleTotalClick(estado)}
+                    >
+                      {totalEstado}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
           </TableBody>
         </Table>
       </div>
 
       {selectedCell && (
-        <div className="mt-8">
-          <h3 className="text-lg font-semibold mb-4">
+        <div className="mt-4 sm:mt-6">
+          <h3 className="text-base sm:text-lg font-semibold mb-3">
             Trabajos en estado &quot;{selectedCell.estado}&quot; {
               selectedCell.categoria === 'total' 
                 ? '- Todos'
@@ -350,9 +425,9 @@ export default function AdminProductionView() {
           <ProductionJobsList 
             jobs={
               selectedCell.categoria === 'total'
-                ? Object.values(trabajosAgrupados[selectedCell.estado].jobs)
+                ? Object.values(trabajosProcesados[selectedCell.estado].jobs)
                   .flat()
-                : trabajosAgrupados[selectedCell.estado].jobs[selectedCell.categoria]
+                : trabajosProcesados[selectedCell.estado].jobs[selectedCell.categoria]
             }
             status={selectedCell.estado}
             category={selectedCell.categoria}
