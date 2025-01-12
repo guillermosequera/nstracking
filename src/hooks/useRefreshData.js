@@ -5,27 +5,35 @@ import { cacheConfig } from '@/config/queryConfig';
 export function useRefreshData() {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
   const refreshAllData = useCallback(async () => {
     if (isRefreshing) return false;
     
     try {
       setIsRefreshing(true);
+      setError(null);
       
       // Crear un delay mínimo para la animación
       const minDelay = new Promise(resolve => setTimeout(resolve, 1000));
       
+      // Lista de keys a refrescar
+      const keysToRefresh = ['delayedJobs', 'production-jobs'];
+      
+      // Validar que todas las keys tengan funciones fetch
+      keysToRefresh.forEach(key => {
+        if (!cacheConfig.hasQueryFunction(key)) {
+          throw new Error(`No se encontró función fetch para: ${key}`);
+        }
+      });
+
       // Invalidar queries usando las keys configuradas
-      const invalidatePromises = [
+      const invalidatePromises = keysToRefresh.map(key => 
         queryClient.invalidateQueries({
-          queryKey: cacheConfig.generateQueryKey('delayedJobs'),
-          refetchType: 'active'
-        }),
-        queryClient.invalidateQueries({
-          queryKey: cacheConfig.generateQueryKey('production-jobs'),
+          queryKey: cacheConfig.generateQueryKey(key),
           refetchType: 'active'
         })
-      ];
+      );
 
       // Esperar la invalidación y el delay mínimo
       await Promise.all([
@@ -33,32 +41,27 @@ export function useRefreshData() {
         minDelay
       ]);
 
-      // Forzar refetch con staleTime 0
-      const refetchPromises = [
+      // Forzar refetch con las funciones correspondientes
+      const refetchPromises = keysToRefresh.map(key => 
         queryClient.fetchQuery({
-          queryKey: cacheConfig.generateQueryKey('delayedJobs'),
-          staleTime: 0
-        }),
-        queryClient.fetchQuery({
-          queryKey: cacheConfig.generateQueryKey('production-jobs'),
+          queryKey: cacheConfig.generateQueryKey(key),
+          queryFn: cacheConfig.getQueryFunction(key),
           staleTime: 0
         })
-      ];
+      );
 
       const results = await Promise.all(refetchPromises);
       
       // Actualizar el caché con los nuevos datos
       results.forEach((data, index) => {
-        const queryKey = index === 0 
-          ? cacheConfig.generateQueryKey('delayedJobs')
-          : cacheConfig.generateQueryKey('production-jobs');
-          
-        queryClient.setQueryData(queryKey, data);
+        const key = keysToRefresh[index];
+        queryClient.setQueryData(cacheConfig.generateQueryKey(key), data);
       });
 
       return true;
     } catch (error) {
       console.error('Error al actualizar datos:', error);
+      setError(error);
       return false;
     } finally {
       setIsRefreshing(false);
@@ -67,6 +70,7 @@ export function useRefreshData() {
 
   return { 
     refreshAllData,
-    isRefreshing 
+    isRefreshing,
+    error 
   };
 }
