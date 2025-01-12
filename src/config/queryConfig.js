@@ -7,8 +7,8 @@ export const defaultQueryConfig = {
       queries: {
         refetchOnWindowFocus: false,
         retry: 2,
-        staleTime: 2 * 60 * 1000, // 2 minutos
-        cacheTime: 5 * 60 * 1000, // 5 minutos
+        staleTime: 0, // Cambiar a 0 para forzar refetch
+        cacheTime: 0, // Cambiar a 0 para no mantener caché
         refetchInterval: false
       }
     }
@@ -16,16 +16,16 @@ export const defaultQueryConfig = {
   
   // Configuración específica para producción
   export const productionQueryConfig = {
-    staleTime: 2 * 60 * 1000,    // 2 minutos
-    cacheTime: 5 * 60 * 1000,    // 5 minutos
-    refetchInterval: 5 * 60 * 1000, // 5 minutos
+    staleTime: 0,    // Cambiar a 0
+    cacheTime: 0,    // Cambiar a 0
+    refetchInterval: false,
     retry: 3
   };
   
   // Configuración específica para trabajos atrasados
   export const delayedJobsQueryConfig = {
-    staleTime: 2 * 60 * 1000,    // 2 minutos
-    cacheTime: 5 * 60 * 1000,    // 5 minutos
+    staleTime: 0,    // Cambiar a 0
+    cacheTime: 0,    // Cambiar a 0
     retry: 1
   };
   

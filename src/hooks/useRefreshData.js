@@ -28,12 +28,20 @@ export function useRefreshData() {
       });
 
       // Invalidar queries usando las keys configuradas
-      const invalidatePromises = keysToRefresh.map(key => 
-        queryClient.invalidateQueries({
+      const invalidatePromises = keysToRefresh.map(key => {
+        // Primero removemos los datos del caché
+        queryClient.removeQueries({
           queryKey: cacheConfig.generateQueryKey(key),
-          refetchType: 'active'
-        })
-      );
+          exact: true
+        });
+        
+        // Luego invalidamos la query
+        return queryClient.invalidateQueries({
+          queryKey: cacheConfig.generateQueryKey(key),
+          refetchType: 'active',
+          exact: true
+        });
+      });
 
       // Esperar la invalidación y el delay mínimo
       await Promise.all([
