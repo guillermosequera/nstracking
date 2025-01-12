@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { useProductionJobs } from '../hooks/useProductionJobs';
 import { useDate } from '@/hooks/useDate';
+import { useRefreshData } from '@/hooks/useRefreshData';
 import { DATE_FORMATS } from '@/hooks/useDate/constants';
 import {
   Table,
@@ -97,11 +98,10 @@ const STATE_PRIORITY = {
 
 export default function AdminProductionView() {
   const [selectedCell, setSelectedCell] = useState(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const queryClient = useQueryClient();
   const { data: session } = useSession();
   const { parseDate, formatDate, toChileTime } = useDate();
-  const { data: trabajosAgrupados = {}, isLoading, error, refetch } = useProductionJobs();
+  const { data: trabajosAgrupados = {}, isLoading, error } = useProductionJobs();
+  const { refreshAllData, isRefreshing } = useRefreshData();
 
   // Función para determinar la categoría de entrega basada en días hábiles
   const determinarCategoriaEntrega = useCallback((trabajo) => {
@@ -154,15 +154,7 @@ export default function AdminProductionView() {
       Object.values(data.jobs).flat().forEach(trabajo => {
         const categoria = determinarCategoriaEntrega(trabajo);
         if (categoria) {
-          resultado[estado].jobs[categoria].push({
-            ...trabajo,
-            // Mantener los campos originales sin reprocesar
-            id: trabajo.id,
-            number: trabajo.number,
-            deliveryDate: trabajo.deliveryDate,
-            entryDate: trabajo.entryDate,
-            diasHabiles: trabajo.diasHabiles
-          });
+          resultado[estado].jobs[categoria].push(trabajo);
         }
       });
     });
@@ -170,47 +162,20 @@ export default function AdminProductionView() {
     return resultado;
   }, [trabajosAgrupados, determinarCategoriaEntrega]);
 
-  // Función para procesar fechas
-  const processDate = useCallback((dateString) => {
-    if (!dateString) return null;
-    const result = parseDate(dateString);
-    if (result.error) return null;
-    return result.date;
-  }, [parseDate]);
-
-  // Función para formatear fechas
+  // Función para formatear fechas con el hook useDate
   const formatDateDisplay = useCallback((dateString, includeTime = true) => {
-    if (!dateString) {
-      return 'Fecha no disponible';
-    }
+    if (!dateString) return 'Fecha no disponible';
     
-    let dateToFormat = dateString;
+    const result = parseDate(dateString);
+    if (result.error) return 'Fecha inválida';
     
-    // Si la fecha viene en formato ISO
-    if (dateString.includes('T')) {
-      const result = parseDate(dateString);
-      if (result.error) return 'Fecha inválida';
-      dateToFormat = result.date;
-    }
-    // Si la fecha viene en formato DD-MM-YYYY o DD/MM/YYYY
-    else if (dateString.includes('-') || dateString.includes('/')) {
-      const separator = dateString.includes('-') ? '-' : '/';
-      const [day, month, year] = dateString.split(separator);
-      if (day && month && year) {
-        const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
-        const result = parseDate(isoDate);
-        if (result.error) return 'Fecha inválida';
-        dateToFormat = result.date;
-      }
-    }
-    
-    const chileDate = toChileTime(dateToFormat);
+    const chileDate = toChileTime(result.date);
     if (!chileDate) return 'Error de zona horaria';
     
-    const formatted = formatDate(chileDate, includeTime ? DATE_FORMATS.DISPLAY_WITH_TIME : DATE_FORMATS.DISPLAY_DATE_ONLY);
-    if (!formatted) return 'Error de formato';
-    
-    return formatted;
+    return formatDate(
+      chileDate, 
+      includeTime ? DATE_FORMATS.DISPLAY_WITH_TIME : DATE_FORMATS.DISPLAY_DATE_ONLY
+    );
   }, [parseDate, formatDate, toChileTime]);
 
   // Ordenar estados por prioridad
@@ -236,59 +201,46 @@ export default function AdminProductionView() {
   }, [estadosOrdenados, calcularTotal]);
 
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) return;
-    
     const currentTotalJobs = totalGeneral;
     const currentSelectedCell = selectedCell;
     
     try {
-      setIsRefreshing(true);
+      const success = await refreshAllData();
       
-      const minDelay = new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const [refreshResult] = await Promise.all([
-        refetch(),
-        minDelay
-      ]);
+      if (success) {
+        // Calcular nuevo total
+        const newTotal = Object.entries(trabajosAgrupados).reduce((total, [_, data]) => {
+          return total + calcularTotal(data.jobs);
+        }, 0);
 
-      if (!refreshResult || !refreshResult.data) {
-        throw new Error('No se recibieron datos en la actualización');
-      }
+        console.log(`Actualización completada:
+          - Total trabajos anteriores: ${currentTotalJobs}
+          - Total trabajos nuevos: ${newTotal}
+          - Diferencia: ${newTotal - currentTotalJobs}
+        `);
 
-      const newData = refreshResult.data;
-      
-      const newTotal = Object.entries(newData).reduce((total, [_, data]) => {
-        return total + calcularTotal(data.jobs);
-      }, 0);
+        // Logging de totales por área
+        Object.entries(trabajosAgrupados).forEach(([area, data]) => {
+          const totalArea = calcularTotal(data.jobs);
+          console.log(`Área ${area}: ${totalArea} trabajos`);
+        });
 
-      console.log(`Actualización completada:
-        - Total trabajos anteriores: ${currentTotalJobs}
-        - Total trabajos nuevos: ${newTotal}
-        - Diferencia: ${newTotal - currentTotalJobs}
-      `);
+        // Validar si la celda seleccionada aún existe
+        if (currentSelectedCell) {
+          const estadoExiste = trabajosAgrupados[currentSelectedCell.estado];
+          const categoriaExiste = currentSelectedCell.categoria === 'total' || 
+            (estadoExiste?.jobs && estadoExiste.jobs[currentSelectedCell.categoria]?.length > 0);
 
-      Object.entries(newData).forEach(([area, data]) => {
-        const totalArea = calcularTotal(data.jobs);
-        console.log(`Área ${area}: ${totalArea} trabajos`);
-      });
-
-      if (currentSelectedCell) {
-        const estadoExiste = newData[currentSelectedCell.estado];
-        const categoriaExiste = currentSelectedCell.categoria === 'total' || 
-          (estadoExiste?.jobs && estadoExiste.jobs[currentSelectedCell.categoria]?.length > 0);
-
-        if (!estadoExiste || !categoriaExiste) {
-          setSelectedCell(null);
-          console.log('La selección actual ya no existe en los nuevos datos');
+          if (!estadoExiste || !categoriaExiste) {
+            setSelectedCell(null);
+            console.log('La selección actual ya no existe en los nuevos datos');
+          }
         }
       }
-      
     } catch (error) {
-      console.error('Error al actualizar:', error);
-    } finally {
-      setIsRefreshing(false);
+      console.error('Error al actualizar matriz de producción:', error);
     }
-  }, [isRefreshing, totalGeneral, selectedCell, refetch, calcularTotal]);
+  }, [totalGeneral, selectedCell, trabajosAgrupados, calcularTotal]);
 
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState error={error} />;

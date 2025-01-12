@@ -2,22 +2,16 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchDelayedJobs } from '@/utils/jobUtils'
+import { delayedJobsQueryConfig, cacheConfig } from '@/config/queryConfig'
 
 export function useDelayedJobs() {
   const queryClient = useQueryClient()
+  const queryKey = cacheConfig.generateQueryKey('delayedJobs')
   
-  // Configuración principal de la query
   const query = useQuery({
-    queryKey: ['delayedJobs'],
+    queryKey,
     queryFn: fetchDelayedJobs,
-    retry: 1,
-    staleTime: 5 * 60 * 1000, // 5 minutos antes de considerar los datos obsoletos
-    cacheTime: 10 * 60 * 1000, // 10 minutos de caché
-    refetchOnWindowFocus: false, // Desactivamos la actualización automática al volver a la ventana
-    refetchOnMount: true, // Actualizar al montar el componente
-    onError: (error) => {
-      console.error('Error en useDelayedJobs:', error)
-    },
+    ...delayedJobsQueryConfig,
     select: (data) => {
       if (!data) return []
       return data
@@ -27,25 +21,25 @@ export function useDelayedJobs() {
   // Función mejorada de refetch
   const refetch = async () => {
     try {
-      // Primero invalidamos la query actual
+      // Invalidamos la query actual
       await queryClient.invalidateQueries({
-        queryKey: ['delayedJobs'],
-        refetchType: 'active',
+        queryKey,
+        refetchType: 'active'
       })
 
-      // Forzamos una nueva obtención de datos
+      // Forzamos nueva obtención de datos
       const result = await queryClient.fetchQuery({
-        queryKey: ['delayedJobs'],
+        queryKey,
         queryFn: fetchDelayedJobs,
-        staleTime: 0,
+        staleTime: 0
       })
 
-      // Actualizamos el cache con los nuevos datos
-      queryClient.setQueryData(['delayedJobs'], result)
+      // Actualizamos el caché
+      queryClient.setQueryData(queryKey, result)
 
       return { data: result }
     } catch (error) {
-      console.error('Error al refrescar trabajos:', error)
+      console.error('Error al refrescar trabajos atrasados:', error)
       throw error
     }
   }
@@ -53,7 +47,7 @@ export function useDelayedJobs() {
   return {
     ...query,
     refetch,
-    isLoading: query.isLoading, // Solo usamos isLoading, no combinamos con isFetching
+    isLoading: query.isLoading,
     error: query.error
   }
 } 

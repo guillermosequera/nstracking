@@ -14,7 +14,7 @@ export const roles = {
                       'bodegacentral@italoptic.cl',
                       'bodegaitaloptic@gmail.com',
                       'bodegacentraltrento@gmail.com',
-                      'italopticasistentemantencion@gmail.com',
+                      
                     ],
     workerCommerce: [
                       'ejecutivo4@italoptic.cl', 
@@ -34,7 +34,7 @@ export const roles = {
     workerLabsAR: ['aritaloptic@gmail.com'],
     workerLabsMineral: ['mineralesitaloptic@gmail.com'],
     workerMontage: ['italopticmontaje@gmail.com'],
-    workerDispatch: ['asisdepachoitaloptic@gmail.com', 'asisdepachoitaloptic2@gmail.com', 'despacho@italoptic.cl'],
+    workerDispatch: ['asisdepachoitaloptic@gmail.com', 'asisdepachoitaloptic2@gmail.com', 'despacho@italoptic.cl', 'italopticasistentemantencion@gmail.com']
   };
   
   export const sheetIds = {
