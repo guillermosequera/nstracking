@@ -98,10 +98,10 @@ const STATE_PRIORITY = {
 
 export default function AdminProductionView() {
   const [selectedCell, setSelectedCell] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { data: session } = useSession();
   const { parseDate, formatDate, toChileTime } = useDate();
-  const { data: trabajosAgrupados = {}, isLoading, error } = useProductionJobs();
-  const { refreshAllData, isRefreshing } = useRefreshData();
+  const { data: trabajosAgrupados = {}, isLoading, error, refetch } = useProductionJobs();
 
   // Función para determinar la categoría de entrega basada en días hábiles
   const determinarCategoriaEntrega = useCallback((trabajo) => {
@@ -201,46 +201,52 @@ export default function AdminProductionView() {
   }, [estadosOrdenados, calcularTotal]);
 
   const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    
+    setIsRefreshing(true);
     const currentTotalJobs = totalGeneral;
     const currentSelectedCell = selectedCell;
     
     try {
-      const success = await refreshAllData();
+      await refetch();
       
-      if (success) {
-        // Calcular nuevo total
-        const newTotal = Object.entries(trabajosAgrupados).reduce((total, [_, data]) => {
-          return total + calcularTotal(data.jobs);
-        }, 0);
+      // Calcular nuevo total después del refetch
+      const newTotal = Object.entries(trabajosAgrupados).reduce((total, [_, data]) => {
+        return total + calcularTotal(data.jobs);
+      }, 0);
 
-        console.log(`Actualización completada:
-          - Total trabajos anteriores: ${currentTotalJobs}
-          - Total trabajos nuevos: ${newTotal}
-          - Diferencia: ${newTotal - currentTotalJobs}
-        `);
+      console.log(`Actualización completada:
+        - Total trabajos anteriores: ${currentTotalJobs}
+        - Total trabajos nuevos: ${newTotal}
+        - Diferencia: ${newTotal - currentTotalJobs}
+      `);
 
-        // Logging de totales por área
-        Object.entries(trabajosAgrupados).forEach(([area, data]) => {
-          const totalArea = calcularTotal(data.jobs);
-          console.log(`Área ${area}: ${totalArea} trabajos`);
-        });
+      // Logging de totales por área
+      Object.entries(trabajosAgrupados).forEach(([area, data]) => {
+        const totalArea = calcularTotal(data.jobs);
+        console.log(`Área ${area}: ${totalArea} trabajos`);
+      });
 
-        // Validar si la celda seleccionada aún existe
-        if (currentSelectedCell) {
-          const estadoExiste = trabajosAgrupados[currentSelectedCell.estado];
-          const categoriaExiste = currentSelectedCell.categoria === 'total' || 
-            (estadoExiste?.jobs && estadoExiste.jobs[currentSelectedCell.categoria]?.length > 0);
+      // Validar si la celda seleccionada aún existe
+      if (currentSelectedCell) {
+        const estadoExiste = trabajosAgrupados[currentSelectedCell.estado];
+        const categoriaExiste = currentSelectedCell.categoria === 'total' || 
+          (estadoExiste?.jobs && estadoExiste.jobs[currentSelectedCell.categoria]?.length > 0);
 
-          if (!estadoExiste || !categoriaExiste) {
-            setSelectedCell(null);
-            console.log('La selección actual ya no existe en los nuevos datos');
-          }
+        if (!estadoExiste || !categoriaExiste) {
+          setSelectedCell(null);
+          console.log('La selección actual ya no existe en los nuevos datos');
         }
       }
     } catch (error) {
       console.error('Error al actualizar matriz de producción:', error);
+    } finally {
+      // Asegurar un mínimo de tiempo de animación
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 1000);
     }
-  }, [totalGeneral, selectedCell, trabajosAgrupados, calcularTotal]);
+  }, [totalGeneral, selectedCell, trabajosAgrupados, calcularTotal, refetch]);
 
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState error={error} />;

@@ -1,12 +1,11 @@
 'use client'
 // nstracking/src/components/DelayedJobsList.js
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
 import { useDelayedJobs } from '@/hooks/useDelayedJobs'
 import { useDate } from '@/hooks/useDate'
-import { useRefreshData } from '@/hooks/useRefreshData'
 import { DATE_FORMATS } from '@/hooks/useDate/constants'
 import { RefreshCw } from 'lucide-react'
 import LoadingState from '@/components/LoadingState'
@@ -25,9 +24,9 @@ const getJobColor = (delayDays) => {
 }
 
 export default function DelayedJobsList() {
-  const { data: jobs, isLoading, error } = useDelayedJobs()
+  const { data: jobs, isLoading, error, refetch } = useDelayedJobs()
   const { parseDate, formatDate, toChileTime } = useDate()
-  const { refreshAllData, isRefreshing } = useRefreshData()
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [expandedJob, setExpandedJob] = useState(null)
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE)
 
@@ -73,25 +72,31 @@ export default function DelayedJobsList() {
     return displayCount < trabajosAtrasados.length
   }, [jobs, displayCount])
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return
+    
+    setIsRefreshing(true)
     try {
-      const success = await refreshAllData()
+      await refetch()
       
-      if (success) {
-        // Reset pagination si cambia el número de trabajos
-        if (jobs?.length !== displayCount) {
-          setDisplayCount(ITEMS_PER_PAGE)
-        }
+      // Reset pagination si cambia el número de trabajos
+      if (jobs?.length !== displayCount) {
+        setDisplayCount(ITEMS_PER_PAGE)
+      }
 
-        // Cerrar trabajo expandido si ya no existe
-        if (expandedJob && !jobs?.some(job => job.id === expandedJob)) {
-          setExpandedJob(null)
-        }
+      // Cerrar trabajo expandido si ya no existe
+      if (expandedJob && !jobs?.some(job => job.id === expandedJob)) {
+        setExpandedJob(null)
       }
     } catch (error) {
       console.error('Error al actualizar trabajos atrasados:', error)
+    } finally {
+      // Asegurar un mínimo de tiempo de animación
+      setTimeout(() => {
+        setIsRefreshing(false)
+      }, 1000)
     }
-  }
+  }, [refetch, jobs, displayCount, expandedJob])
 
   const handleLoadMore = () => {
     setDisplayCount(prev => prev + ITEMS_PER_PAGE)

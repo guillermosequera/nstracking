@@ -1,53 +1,29 @@
 // nstracking/src/hooks/useDelayedJobs.js
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { fetchDelayedJobs } from '@/utils/jobUtils'
-import { delayedJobsQueryConfig, cacheConfig } from '@/config/queryConfig'
+import { delayedJobsQueryConfig, queryUtils } from '@/config/queryConfig'
 
 export function useDelayedJobs() {
-  const queryClient = useQueryClient()
-  const queryKey = cacheConfig.generateQueryKey('delayedJobs')
+  const queryKey = queryUtils.generateQueryKey('delayed-jobs')
   
-  const query = useQuery({
+  return useQuery({
     queryKey,
-    queryFn: fetchDelayedJobs,
+    queryFn: async () => {
+      console.log('Fetching delayed jobs...')
+      try {
+        const data = await fetchDelayedJobs()
+        return data
+      } catch (error) {
+        console.error('Error fetching delayed jobs:', error)
+        throw error
+      }
+    },
     ...delayedJobsQueryConfig,
-    select: (data) => {
-      if (!data) return []
-      return data
+    onSuccess: (data) => {
+      console.log('Delayed jobs fetched successfully:', {
+        totalJobs: data?.length || 0
+      })
     }
   })
-
-  // Función mejorada de refetch
-  const refetch = async () => {
-    try {
-      // Invalidamos la query actual
-      await queryClient.invalidateQueries({
-        queryKey,
-        refetchType: 'active'
-      })
-
-      // Forzamos nueva obtención de datos
-      const result = await queryClient.fetchQuery({
-        queryKey,
-        queryFn: fetchDelayedJobs,
-        staleTime: 0
-      })
-
-      // Actualizamos el caché
-      queryClient.setQueryData(queryKey, result)
-
-      return { data: result }
-    } catch (error) {
-      console.error('Error al refrescar trabajos atrasados:', error)
-      throw error
-    }
-  }
-
-  return {
-    ...query,
-    refetch,
-    isLoading: query.isLoading,
-    error: query.error
-  }
 } 
