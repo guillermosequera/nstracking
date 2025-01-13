@@ -135,46 +135,34 @@ export default function AdminProductionView() {
   const trabajosProcesados = useMemo(() => {
     const resultado = {};
     
-    // Validación más estricta de los datos
-    if (!trabajosAgrupados || typeof trabajosAgrupados !== 'object') {
-      console.log('No hay datos de trabajos agrupados o formato inválido');
+    // Si no hay datos, retornar objeto vacío
+    if (!trabajosAgrupados) {
       return resultado;
     }
     
-    try {
-      Object.entries(trabajosAgrupados).forEach(([estado, data]) => {
-        if (!data || typeof data !== 'object') {
-          console.log(`Datos inválidos para estado ${estado}`);
-          return;
-        }
-
+    Object.entries(trabajosAgrupados).forEach(([estado, data]) => {
+      if (!resultado[estado]) {
         resultado[estado] = {
-          area: data.area || 'Sin área',
+          area: data.area,
           jobs: {}
         };
+      }
 
-        // Inicializar todas las categorías
-        DELIVERY_COLUMNS.forEach(column => {
-          resultado[estado].jobs[column.key] = [];
-        });
-
-        // Validar que data.jobs existe y es un objeto
-        if (data.jobs && typeof data.jobs === 'object') {
-          // Procesar cada trabajo
-          Object.values(data.jobs).flat().forEach(trabajo => {
-            if (trabajo) {
-              const categoria = determinarCategoriaEntrega(trabajo);
-              if (categoria) {
-                resultado[estado].jobs[categoria].push(trabajo);
-              }
-            }
-          });
-        }
+      // Inicializar todas las categorías
+      DELIVERY_COLUMNS.forEach(column => {
+        resultado[estado].jobs[column.key] = [];
       });
-    } catch (error) {
-      console.error('Error procesando trabajos:', error);
-      return resultado;
-    }
+
+      // Procesar cada trabajo
+      if (data.jobs) {
+        Object.values(data.jobs).flat().forEach(trabajo => {
+          const categoria = determinarCategoriaEntrega(trabajo);
+          if (categoria) {
+            resultado[estado].jobs[categoria].push(trabajo);
+          }
+        });
+      }
+    });
 
     return resultado;
   }, [trabajosAgrupados, determinarCategoriaEntrega]);
@@ -209,6 +197,8 @@ export default function AdminProductionView() {
 
   // Calcular el total de trabajos por estado
   const calcularTotal = useCallback((jobs) => {
+    if (!jobs) return 0;
+    
     return DELIVERY_COLUMNS.reduce((total, column) => {
       return total + (jobs[column.key]?.length || 0);
     }, 0);
