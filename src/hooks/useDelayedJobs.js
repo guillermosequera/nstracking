@@ -11,7 +11,7 @@ export function useDelayedJobs() {
       console.log('Fetching delayed jobs...')
       const response = await fetchDelayedJobs()
       console.log('Delayed jobs fetched successfully')
-      return response.data
+      return response
     }
   })
 
