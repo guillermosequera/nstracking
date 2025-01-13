@@ -212,18 +212,18 @@ export default function AdminProductionView() {
     if (isRefreshing) return;
     
     setIsRefreshing(true);
-    console.log('Iniciando actualización de datos de producción...')
+    console.log('Iniciando actualización de datos de producción...');
     
     try {
       await refetch();
-      console.log('Datos de producción actualizados exitosamente')
+      console.log('Datos de producción actualizados exitosamente');
     } catch (error) {
-      console.error('Error al actualizar datos:', error)
+      console.error('Error al actualizar datos de producción:', error);
     } finally {
-      // Asegurar un mínimo de tiempo de animación
+      // Asegurar un mínimo de 1 segundo para la animación
       setTimeout(() => {
-        setIsRefreshing(false)
-      }, 1000)
+        setIsRefreshing(false);
+      }, 1000);
     }
   }, [isRefreshing, refetch]);
 

@@ -1,48 +1,25 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { fetchProductionJobs } from '@/utils/jobUtils'
-import { productionQueryConfig, queryUtils, SHARED_CACHE_KEY } from '@/config/queryConfig'
+import { queryUtils } from '@/config/queryConfig'
 
 export function useProductionJobs() {
-  const queryClient = useQueryClient()
-  const queryKey = queryUtils.generateQueryKey('production')
-  
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey,
+  const { data: trabajosAgrupados, isLoading, error, refetch } = useQuery({
+    queryKey: queryUtils.generateQueryKey('production-jobs'),
     queryFn: async () => {
       console.log('Fetching production jobs...')
-      try {
-        const response = await fetchProductionJobs()
-        
-        // Extraer datos y timestamp de la respuesta
-        const { data: trabajosAgrupados, timestamp } = response
-        
-        console.log('Production jobs fetched successfully:', {
-          timestamp,
-          totalEstados: Object.keys(trabajosAgrupados).length
-        })
-
-        // Actualizar el caché con los nuevos datos
-        queryClient.setQueryData(queryKey, trabajosAgrupados)
-        
-        return trabajosAgrupados
-      } catch (error) {
-        console.error('Error fetching production jobs:', error)
-        throw error
-      }
+      const response = await fetchProductionJobs()
+      console.log('Production jobs fetched successfully')
+      return response
     },
-    ...productionQueryConfig
+    staleTime: 0, // Considerar los datos obsoletos inmediatamente
+    cacheTime: 0, // No cachear la respuesta
+    refetchOnMount: true // Refetch al montar el componente
   })
 
-  // Verificación periódica cada 5 minutos
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log('Ejecutando verificación periódica de trabajos de producción')
-      refetch()
-    }, 5 * 60 * 1000)
-
-    return () => clearInterval(interval)
-  }, [refetch])
-
-  return { data, isLoading, error, refetch }
+  return {
+    trabajosAgrupados,
+    isLoading,
+    error,
+    refetch
+  }
 } 
