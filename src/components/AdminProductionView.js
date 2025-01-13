@@ -100,7 +100,7 @@ export default function AdminProductionView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { data: session } = useSession();
   const { parseDate, formatDate, toChileTime } = useDate();
-  const { data: trabajosAgrupados, isLoading, error, refetch } = useProductionJobs();
+  const { trabajosAgrupados, isLoading, error, refetch } = useProductionJobs();
 
   // Función para determinar la categoría de entrega basada en días hábiles
   const determinarCategoriaEntrega = useCallback((trabajo) => {
