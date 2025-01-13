@@ -135,32 +135,46 @@ export default function AdminProductionView() {
   const trabajosProcesados = useMemo(() => {
     const resultado = {};
     
-    // Si no hay datos, retornar objeto vacío
-    if (!trabajosAgrupados) {
+    // Validación más estricta de los datos
+    if (!trabajosAgrupados || typeof trabajosAgrupados !== 'object') {
+      console.log('No hay datos de trabajos agrupados o formato inválido');
       return resultado;
     }
     
-    Object.entries(trabajosAgrupados).forEach(([estado, data]) => {
-      if (!resultado[estado]) {
+    try {
+      Object.entries(trabajosAgrupados).forEach(([estado, data]) => {
+        if (!data || typeof data !== 'object') {
+          console.log(`Datos inválidos para estado ${estado}`);
+          return;
+        }
+
         resultado[estado] = {
-          area: data.area,
+          area: data.area || 'Sin área',
           jobs: {}
         };
-      }
 
-      // Inicializar todas las categorías
-      DELIVERY_COLUMNS.forEach(column => {
-        resultado[estado].jobs[column.key] = [];
-      });
+        // Inicializar todas las categorías
+        DELIVERY_COLUMNS.forEach(column => {
+          resultado[estado].jobs[column.key] = [];
+        });
 
-      // Procesar cada trabajo
-      Object.values(data.jobs).flat().forEach(trabajo => {
-        const categoria = determinarCategoriaEntrega(trabajo);
-        if (categoria) {
-          resultado[estado].jobs[categoria].push(trabajo);
+        // Validar que data.jobs existe y es un objeto
+        if (data.jobs && typeof data.jobs === 'object') {
+          // Procesar cada trabajo
+          Object.values(data.jobs).flat().forEach(trabajo => {
+            if (trabajo) {
+              const categoria = determinarCategoriaEntrega(trabajo);
+              if (categoria) {
+                resultado[estado].jobs[categoria].push(trabajo);
+              }
+            }
+          });
         }
       });
-    });
+    } catch (error) {
+      console.error('Error procesando trabajos:', error);
+      return resultado;
+    }
 
     return resultado;
   }, [trabajosAgrupados, determinarCategoriaEntrega]);
