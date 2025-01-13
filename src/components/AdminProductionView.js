@@ -201,37 +201,65 @@ export default function AdminProductionView() {
   }, [estadosOrdenados, calcularTotal]);
 
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) return;
+    if (isRefreshing) {
+      console.log('Refresh ya en progreso, ignorando nueva solicitud')
+      return;
+    }
     
+    console.log('Iniciando refresh de matriz de producción...')
     setIsRefreshing(true);
     const currentTotalJobs = totalGeneral;
     const currentSelectedCell = selectedCell;
     
     try {
-      await refetch();
+      console.log('Estado antes del refetch:', {
+        totalTrabajos: currentTotalJobs,
+        seleccionActual: currentSelectedCell,
+        estadosActuales: Object.keys(trabajosAgrupados)
+      })
+
+      console.log('Ejecutando refetch...')
+      await refetch()
       
       // Calcular nuevo total después del refetch
       const newTotal = Object.entries(trabajosAgrupados).reduce((total, [_, data]) => {
         return total + calcularTotal(data.jobs);
       }, 0);
 
-      console.log(`Actualización completada:
-        - Total trabajos anteriores: ${currentTotalJobs}
-        - Total trabajos nuevos: ${newTotal}
-        - Diferencia: ${newTotal - currentTotalJobs}
-      `);
-
-      // Logging de totales por área
-      Object.entries(trabajosAgrupados).forEach(([area, data]) => {
-        const totalArea = calcularTotal(data.jobs);
-        console.log(`Área ${area}: ${totalArea} trabajos`);
+      console.log('Resultados del refresh:', {
+        totalAnterior: currentTotalJobs,
+        totalNuevo: newTotal,
+        diferencia: newTotal - currentTotalJobs,
+        timestamp: new Date().toISOString()
       });
 
-      // Validar si la celda seleccionada aún existe
+      // Logging detallado por área
+      console.log('=== Desglose por área ===');
+      Object.entries(trabajosAgrupados).forEach(([area, data]) => {
+        const totalArea = calcularTotal(data.jobs);
+        const desglosePorCategoria = Object.entries(data.jobs).reduce((acc, [categoria, trabajos]) => {
+          acc[categoria] = trabajos.length;
+          return acc;
+        }, {});
+        
+        console.log(`Área: ${area}`, {
+          total: totalArea,
+          desglosePorCategoria
+        });
+      });
+
+      // Validar selección actual
       if (currentSelectedCell) {
         const estadoExiste = trabajosAgrupados[currentSelectedCell.estado];
         const categoriaExiste = currentSelectedCell.categoria === 'total' || 
           (estadoExiste?.jobs && estadoExiste.jobs[currentSelectedCell.categoria]?.length > 0);
+
+        console.log('Validación de selección:', {
+          estadoSeleccionado: currentSelectedCell.estado,
+          categoriaSeleccionada: currentSelectedCell.categoria,
+          estadoExiste: !!estadoExiste,
+          categoriaExiste
+        });
 
         if (!estadoExiste || !categoriaExiste) {
           setSelectedCell(null);
@@ -239,11 +267,13 @@ export default function AdminProductionView() {
         }
       }
     } catch (error) {
-      console.error('Error al actualizar matriz de producción:', error);
+      console.error('Error durante el refresh:', error);
     } finally {
+      console.log('Finalizando refresh...');
       // Asegurar un mínimo de tiempo de animación
       setTimeout(() => {
         setIsRefreshing(false);
+        console.log('Estado de refresh restablecido');
       }, 1000);
     }
   }, [totalGeneral, selectedCell, trabajosAgrupados, calcularTotal, refetch]);
