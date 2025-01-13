@@ -124,12 +124,31 @@ export async function GET(request) {
       trabajosAgrupados[estado].jobs[categoria].push(trabajo);
     });
 
-    return NextResponse.json(trabajosAgrupados);
+    // Agregar timestamp a la respuesta
+    const responseData = {
+      timestamp: new Date().toISOString(),
+      data: trabajosAgrupados
+    };
+
+    return NextResponse.json(responseData, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
   } catch (error) {
     console.error('Error en API de producción:', error);
     return NextResponse.json(
       { error: 'Error al procesar la solicitud', details: error.message },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      }
     );
   }
 } 

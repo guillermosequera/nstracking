@@ -76,8 +76,11 @@ export default function DelayedJobsList() {
     if (isRefreshing) return
     
     setIsRefreshing(true)
+    console.log('Iniciando actualización de trabajos atrasados...')
+    
     try {
       await refetch()
+      console.log('Trabajos atrasados actualizados exitosamente')
       
       // Reset pagination si cambia el número de trabajos
       if (jobs?.length !== displayCount) {

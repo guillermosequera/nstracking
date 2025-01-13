@@ -5,7 +5,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { useProductionJobs } from '../hooks/useProductionJobs';
 import { useDate } from '@/hooks/useDate';
-import { useRefreshData } from '@/hooks/useRefreshData';
 import { DATE_FORMATS } from '@/hooks/useDate/constants';
 import {
   Table,
@@ -101,7 +100,7 @@ export default function AdminProductionView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { data: session } = useSession();
   const { parseDate, formatDate, toChileTime } = useDate();
-  const { data: trabajosAgrupados = {}, isLoading, error, refetch } = useProductionJobs();
+  const { data: trabajosAgrupados, isLoading, error, refetch } = useProductionJobs();
 
   // Función para determinar la categoría de entrega basada en días hábiles
   const determinarCategoriaEntrega = useCallback((trabajo) => {
@@ -136,6 +135,11 @@ export default function AdminProductionView() {
   // Procesar y categorizar trabajos
   const trabajosProcesados = useMemo(() => {
     const resultado = {};
+    
+    // Si no hay datos, retornar objeto vacío
+    if (!trabajosAgrupados) {
+      return resultado;
+    }
     
     Object.entries(trabajosAgrupados).forEach(([estado, data]) => {
       if (!resultado[estado]) {
@@ -179,12 +183,16 @@ export default function AdminProductionView() {
   }, [parseDate, formatDate, toChileTime]);
 
   // Ordenar estados por prioridad
-  const estadosOrdenados = Object.entries(trabajosAgrupados)
-    .sort(([estadoA], [estadoB]) => {
-      const prioridadA = STATE_PRIORITY[estadoA] || 999;
-      const prioridadB = STATE_PRIORITY[estadoB] || 999;
-      return prioridadA - prioridadB;
-    });
+  const estadosOrdenados = useMemo(() => {
+    if (!trabajosAgrupados) return [];
+    
+    return Object.entries(trabajosAgrupados)
+      .sort(([estadoA], [estadoB]) => {
+        const prioridadA = STATE_PRIORITY[estadoA] || 999;
+        const prioridadB = STATE_PRIORITY[estadoB] || 999;
+        return prioridadA - prioridadB;
+      });
+  }, [trabajosAgrupados]);
 
   // Calcular el total de trabajos por estado
   const calcularTotal = useCallback((jobs) => {
@@ -201,82 +209,23 @@ export default function AdminProductionView() {
   }, [estadosOrdenados, calcularTotal]);
 
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) {
-      console.log('Refresh ya en progreso, ignorando nueva solicitud')
-      return;
-    }
+    if (isRefreshing) return;
     
-    console.log('Iniciando refresh de matriz de producción...')
     setIsRefreshing(true);
-    const currentTotalJobs = totalGeneral;
-    const currentSelectedCell = selectedCell;
+    console.log('Iniciando actualización de datos de producción...')
     
     try {
-      console.log('Estado antes del refetch:', {
-        totalTrabajos: currentTotalJobs,
-        seleccionActual: currentSelectedCell,
-        estadosActuales: Object.keys(trabajosAgrupados)
-      })
-
-      console.log('Ejecutando refetch...')
-      await refetch()
-      
-      // Calcular nuevo total después del refetch
-      const newTotal = Object.entries(trabajosAgrupados).reduce((total, [_, data]) => {
-        return total + calcularTotal(data.jobs);
-      }, 0);
-
-      console.log('Resultados del refresh:', {
-        totalAnterior: currentTotalJobs,
-        totalNuevo: newTotal,
-        diferencia: newTotal - currentTotalJobs,
-        timestamp: new Date().toISOString()
-      });
-
-      // Logging detallado por área
-      console.log('=== Desglose por área ===');
-      Object.entries(trabajosAgrupados).forEach(([area, data]) => {
-        const totalArea = calcularTotal(data.jobs);
-        const desglosePorCategoria = Object.entries(data.jobs).reduce((acc, [categoria, trabajos]) => {
-          acc[categoria] = trabajos.length;
-          return acc;
-        }, {});
-        
-        console.log(`Área: ${area}`, {
-          total: totalArea,
-          desglosePorCategoria
-        });
-      });
-
-      // Validar selección actual
-      if (currentSelectedCell) {
-        const estadoExiste = trabajosAgrupados[currentSelectedCell.estado];
-        const categoriaExiste = currentSelectedCell.categoria === 'total' || 
-          (estadoExiste?.jobs && estadoExiste.jobs[currentSelectedCell.categoria]?.length > 0);
-
-        console.log('Validación de selección:', {
-          estadoSeleccionado: currentSelectedCell.estado,
-          categoriaSeleccionada: currentSelectedCell.categoria,
-          estadoExiste: !!estadoExiste,
-          categoriaExiste
-        });
-
-        if (!estadoExiste || !categoriaExiste) {
-          setSelectedCell(null);
-          console.log('La selección actual ya no existe en los nuevos datos');
-        }
-      }
+      await refetch();
+      console.log('Datos de producción actualizados exitosamente')
     } catch (error) {
-      console.error('Error durante el refresh:', error);
+      console.error('Error al actualizar datos:', error)
     } finally {
-      console.log('Finalizando refresh...');
       // Asegurar un mínimo de tiempo de animación
       setTimeout(() => {
-        setIsRefreshing(false);
-        console.log('Estado de refresh restablecido');
-      }, 1000);
+        setIsRefreshing(false)
+      }, 1000)
     }
-  }, [totalGeneral, selectedCell, trabajosAgrupados, calcularTotal, refetch]);
+  }, [isRefreshing, refetch]);
 
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState error={error} />;

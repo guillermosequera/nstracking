@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { fetchProductionJobs } from '@/utils/jobUtils'
 import { productionQueryConfig, queryUtils, SHARED_CACHE_KEY } from '@/config/queryConfig'
 
@@ -6,56 +7,42 @@ export function useProductionJobs() {
   const queryClient = useQueryClient()
   const queryKey = queryUtils.generateQueryKey('production')
   
-  console.log('useProductionJobs - Query Key:', queryKey)
-  
-  return useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey,
     queryFn: async () => {
-      const timestamp = new Date().toISOString()
-      console.log(`[${timestamp}] Iniciando fetch de trabajos de producción...`)
-      console.log('Estado del caché antes del fetch:', {
-        queryKey,
-        cachedData: queryClient.getQueryData(queryKey)
-      })
-
+      console.log('Fetching production jobs...')
       try {
-        console.log('Llamando a fetchProductionJobs...')
-        const data = await fetchProductionJobs()
+        const response = await fetchProductionJobs()
         
-        console.log('Datos recibidos de fetchProductionJobs:', {
-          totalEstados: Object.keys(data).length,
-          estados: Object.keys(data)
+        // Extraer datos y timestamp de la respuesta
+        const { data: trabajosAgrupados, timestamp } = response
+        
+        console.log('Production jobs fetched successfully:', {
+          timestamp,
+          totalEstados: Object.keys(trabajosAgrupados).length
         })
 
-        // Invalidar el caché compartido
-        console.log('Invalidando caché compartido...')
-        await queryClient.invalidateQueries({
-          queryKey: [SHARED_CACHE_KEY],
-          exact: false,
-          refetchType: 'none'
-        })
-        
         // Actualizar el caché con los nuevos datos
-        console.log('Actualizando caché con nuevos datos...')
-        queryClient.setQueryData(queryKey, data)
+        queryClient.setQueryData(queryKey, trabajosAgrupados)
         
-        console.log('Fetch completado exitosamente')
-        return data
+        return trabajosAgrupados
       } catch (error) {
-        console.error('Error en fetchProductionJobs:', error)
+        console.error('Error fetching production jobs:', error)
         throw error
       }
     },
-    ...productionQueryConfig,
-    onSuccess: (data) => {
-      console.log('Query completada con éxito:', {
-        timestamp: new Date().toISOString(),
-        totalEstados: Object.keys(data).length,
-        estados: Object.keys(data)
-      })
-    },
-    onError: (error) => {
-      console.error('Error en la query:', error)
-    }
+    ...productionQueryConfig
   })
+
+  // Verificación periódica cada 5 minutos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('Ejecutando verificación periódica de trabajos de producción')
+      refetch()
+    }, 5 * 60 * 1000)
+
+    return () => clearInterval(interval)
+  }, [refetch])
+
+  return { data, isLoading, error, refetch }
 } 
