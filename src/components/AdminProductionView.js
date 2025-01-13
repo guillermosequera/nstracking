@@ -215,7 +215,7 @@ export default function AdminProductionView() {
     console.log('Iniciando actualización de datos de producción...');
     
     try {
-      await refetch();
+      await refetch({ cancelRefetch: true });
       console.log('Datos de producción actualizados exitosamente');
     } catch (error) {
       console.error('Error al actualizar datos de producción:', error);

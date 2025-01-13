@@ -10,7 +10,12 @@ export function useProductionJobs() {
       const response = await fetchProductionJobs()
       console.log('Production jobs fetched successfully')
       return response.data
-    }
+    },
+    staleTime: 0,
+    cacheTime: 0,
+    retry: 3,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false
   })
 
   return {
