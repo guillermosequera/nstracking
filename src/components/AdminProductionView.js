@@ -1,7 +1,6 @@
 // nstracking/src/components/AdminProductionView.js
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from 'next-auth/react';
 import { useProductionJobs } from '../hooks/useProductionJobs';
 import { useDate } from '@/hooks/useDate';
@@ -215,10 +214,8 @@ export default function AdminProductionView() {
     console.log('Iniciando actualización de datos de producción...');
     
     try {
-      await refetch({ cancelRefetch: true });
+      await refetch();
       console.log('Datos de producción actualizados exitosamente');
-    } catch (error) {
-      console.error('Error al actualizar datos de producción:', error);
     } finally {
       // Asegurar un mínimo de 1 segundo para la animación
       setTimeout(() => {
