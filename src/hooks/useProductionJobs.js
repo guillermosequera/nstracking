@@ -65,7 +65,7 @@ export function useProductionJobs() {
       timestamp: new Date().toISOString()
     })
     
-    // Invalidar el caché actual
+    // Invalidar el caché actual pero mantener los datos hasta que lleguen los nuevos
     await queryClient.invalidateQueries({
       queryKey: queryUtils.generateQueryKey('production'),
       refetchType: 'active',
@@ -86,12 +86,6 @@ export function useProductionJobs() {
     }
     
     console.log('📊 Comparación de datos:', cambios)
-    
-    // Si no hubo cambios, forzar una actualización del caché
-    if (!cambios.huboActualizacion) {
-      console.log('⚠️ No se detectaron cambios, forzando actualización del caché...')
-      await queryClient.resetQueries(queryUtils.generateQueryKey('production'))
-    }
     
     return result
   }

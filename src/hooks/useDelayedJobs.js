@@ -68,7 +68,7 @@ export function useDelayedJobs() {
       timestamp: new Date().toISOString()
     })
     
-    // Invalidar el caché actual
+    // Invalidar el caché actual pero mantener los datos hasta que lleguen los nuevos
     await queryClient.invalidateQueries({
       queryKey: queryUtils.generateQueryKey('delayed-jobs'),
       refetchType: 'active',
@@ -88,12 +88,6 @@ export function useDelayedJobs() {
     }
     
     console.log('📊 Comparación de datos:', cambios)
-    
-    // Si no hubo cambios, forzar una actualización del caché
-    if (!cambios.huboActualizacion) {
-      console.log('⚠️ No se detectaron cambios, forzando actualización del caché...')
-      await queryClient.resetQueries(queryUtils.generateQueryKey('delayed-jobs'))
-    }
     
     return result
   }
