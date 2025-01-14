@@ -1,9 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchProductionJobs } from '@/utils/jobUtils'
+import { productionQueryConfig, queryUtils } from '@/config/queryConfig'
 
 export function useProductionJobs() {
+  const queryClient = useQueryClient()
+  
   const { data: trabajosAgrupados = {}, isLoading, error, refetch } = useQuery({
-    queryKey: ['production-jobs'],
+    queryKey: queryUtils.generateQueryKey('production'),
     queryFn: async () => {
       console.log('Iniciando fetch de trabajos de producción...')
       const response = await fetchProductionJobs()
@@ -26,17 +29,27 @@ export function useProductionJobs() {
       console.log('No se encontraron datos válidos en la respuesta')
       return {}
     },
-    retry: 3,
-    refetchOnWindowFocus: false,
-    staleTime: 0,
-    cacheTime: 0,
-    enabled: true
+    ...productionQueryConfig,
+    staleTime: 0, // Forzar revalidación inmediata
+    cacheTime: 1000 * 60, // Cache por 1 minuto
+    refetchOnMount: true,
+    refetchOnWindowFocus: true
   })
+
+  const forceRefresh = async () => {
+    console.log('Forzando actualización de trabajos de producción...')
+    // Invalidar el caché actual
+    await queryClient.invalidateQueries(queryUtils.generateQueryKey('production'))
+    // Realizar el refetch
+    const result = await refetch()
+    console.log('Resultado del refetch forzado:', result)
+    return result
+  }
 
   return {
     trabajosAgrupados,
     isLoading,
     error,
-    refetch
+    refetch: forceRefresh
   }
 } 

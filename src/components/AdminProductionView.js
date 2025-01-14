@@ -223,30 +223,31 @@ export default function AdminProductionView() {
     
     setIsRefreshing(true);
     console.log('Iniciando actualización de datos de producción...');
-    console.log('Estado actual de trabajosAgrupados:', {
-      tipo: typeof trabajosAgrupados,
-      keys: Object.keys(trabajosAgrupados),
-      muestra: trabajosAgrupados
-    });
     
     try {
-      const result = await refetch();
-      console.log('Resultado del refetch:', result);
-      console.log('Nuevo estado después del refetch:', {
+      console.log('Estado actual antes del refetch:', {
         tipo: typeof trabajosAgrupados,
         keys: Object.keys(trabajosAgrupados),
         muestra: trabajosAgrupados
       });
       
+      const result = await refetch();
+      
+      console.log('Resultado del refetch:', {
+        success: result.isSuccess,
+        data: result.data,
+        error: result.error
+      });
+      
       // Validar si hay celda seleccionada y los datos existen
-      if (selectedCell && trabajosAgrupados) {
+      if (selectedCell && result.data) {
         const { estado, categoria } = selectedCell;
-        const estadoExiste = trabajosAgrupados[estado];
+        const estadoExiste = result.data[estado];
         console.log('Validando celda seleccionada:', { 
           estado, 
           categoria, 
           estadoExiste,
-          estadosDisponibles: Object.keys(trabajosAgrupados)
+          estadosDisponibles: Object.keys(result.data)
         });
         if (!estadoExiste) {
           setSelectedCell(null);
@@ -255,12 +256,8 @@ export default function AdminProductionView() {
     } catch (error) {
       console.error('Error durante el refetch:', error);
     } finally {
+      // Asegurar un mínimo de tiempo para la animación
       setTimeout(() => {
-        console.log('Estado final de trabajosAgrupados:', {
-          tipo: typeof trabajosAgrupados,
-          keys: Object.keys(trabajosAgrupados),
-          muestra: trabajosAgrupados
-        });
         setIsRefreshing(false);
       }, 1000);
     }

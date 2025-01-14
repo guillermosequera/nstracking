@@ -79,21 +79,34 @@ export default function DelayedJobsList() {
     console.log('Iniciando actualización de trabajos atrasados...');
     
     try {
-      await refetch();
-      console.log('Trabajos atrasados actualizados exitosamente');
+      console.log('Estado actual antes del refetch:', {
+        trabajosActuales: jobs?.length || 0,
+        expandido: expandedJob,
+        mostrados: displayCount
+      });
       
-      // Resetear estados de visualización
-      setDisplayCount(10);
-      setExpandedJob(null);
+      const result = await refetch();
+      
+      console.log('Resultado del refetch:', {
+        success: result.isSuccess,
+        trabajosNuevos: result.data?.length || 0,
+        error: result.error
+      });
+
+      // Resetear estados de visualización si hay cambios
+      if (result.data?.length !== jobs?.length) {
+        setDisplayCount(ITEMS_PER_PAGE);
+        setExpandedJob(null);
+      }
     } catch (error) {
-      console.error('Error al actualizar trabajos atrasados:', error);
+      console.error('Error durante el refetch:', error);
     } finally {
-      // Asegurar un mínimo de 1 segundo para la animación
+      // Asegurar un mínimo de tiempo para la animación
       setTimeout(() => {
         setIsRefreshing(false);
       }, 1000);
     }
-  }, [isRefreshing, refetch]);
+  }, [isRefreshing, refetch, jobs?.length, expandedJob, displayCount]);
 
   const handleLoadMore = () => {
     setDisplayCount(prev => prev + ITEMS_PER_PAGE)
