@@ -7,13 +7,24 @@ export function useProductionJobs() {
     queryFn: async () => {
       console.log('Iniciando fetch de trabajos de producción...')
       const response = await fetchProductionJobs()
-      console.log('Respuesta completa:', response)
-      console.log('Estructura de datos recibida:', {
-        tieneData: !!response.data,
-        tipoData: typeof response.data,
-        estructuraData: response.data ? Object.keys(response.data) : 'sin datos'
-      })
-      return response.data || {}
+      
+      console.log('Respuesta raw:', response)
+      console.log('Tipo de respuesta:', typeof response)
+      
+      // Si la respuesta ya es el objeto de trabajos agrupados, usarlo directamente
+      if (response && typeof response === 'object' && !response.data && Object.keys(response).length > 0) {
+        console.log('Usando respuesta directamente:', response)
+        return response
+      }
+      
+      // Si la respuesta tiene estructura {data, timestamp}
+      if (response && response.data) {
+        console.log('Extrayendo datos de response.data:', response.data)
+        return response.data
+      }
+      
+      console.log('No se encontraron datos válidos en la respuesta')
+      return {}
     },
     retry: 3,
     refetchOnWindowFocus: false,

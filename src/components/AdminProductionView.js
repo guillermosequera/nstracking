@@ -99,7 +99,14 @@ export default function AdminProductionView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { data: session } = useSession();
   const { parseDate, formatDate, toChileTime } = useDate();
-  const { trabajosAgrupados, isLoading, error, refetch } = useProductionJobs();
+  const { trabajosAgrupados = {}, isLoading, error, refetch } = useProductionJobs();
+
+  console.log('AdminProductionView - trabajosAgrupados recibidos:', {
+    tipo: typeof trabajosAgrupados,
+    esObjeto: trabajosAgrupados instanceof Object,
+    keys: Object.keys(trabajosAgrupados),
+    hayDatos: Object.keys(trabajosAgrupados).length > 0
+  });
 
   // Función para determinar la categoría de entrega basada en días hábiles
   const determinarCategoriaEntrega = useCallback((trabajo) => {
@@ -216,18 +223,31 @@ export default function AdminProductionView() {
     
     setIsRefreshing(true);
     console.log('Iniciando actualización de datos de producción...');
-    console.log('Estado actual de trabajosAgrupados:', trabajosAgrupados);
+    console.log('Estado actual de trabajosAgrupados:', {
+      tipo: typeof trabajosAgrupados,
+      keys: Object.keys(trabajosAgrupados),
+      muestra: trabajosAgrupados
+    });
     
     try {
-      await refetch();
-      console.log('Refetch completado');
-      console.log('Nuevo estado de trabajosAgrupados:', trabajosAgrupados);
+      const result = await refetch();
+      console.log('Resultado del refetch:', result);
+      console.log('Nuevo estado después del refetch:', {
+        tipo: typeof trabajosAgrupados,
+        keys: Object.keys(trabajosAgrupados),
+        muestra: trabajosAgrupados
+      });
       
       // Validar si hay celda seleccionada y los datos existen
       if (selectedCell && trabajosAgrupados) {
         const { estado, categoria } = selectedCell;
         const estadoExiste = trabajosAgrupados[estado];
-        console.log('Validando celda seleccionada:', { estado, categoria, estadoExiste });
+        console.log('Validando celda seleccionada:', { 
+          estado, 
+          categoria, 
+          estadoExiste,
+          estadosDisponibles: Object.keys(trabajosAgrupados)
+        });
         if (!estadoExiste) {
           setSelectedCell(null);
         }
@@ -236,7 +256,11 @@ export default function AdminProductionView() {
       console.error('Error durante el refetch:', error);
     } finally {
       setTimeout(() => {
-        console.log('Estado final de trabajosAgrupados:', trabajosAgrupados);
+        console.log('Estado final de trabajosAgrupados:', {
+          tipo: typeof trabajosAgrupados,
+          keys: Object.keys(trabajosAgrupados),
+          muestra: trabajosAgrupados
+        });
         setIsRefreshing(false);
       }, 1000);
     }
