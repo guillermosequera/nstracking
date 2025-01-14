@@ -119,10 +119,51 @@ export async function GET() {
     // Ordenar por días de atraso
     trabajosAtrasados.sort((a, b) => b.delayDays - a.delayDays)
     
-    return Response.json(trabajosAtrasados)
+    const responseData = {
+      data: trabajosAtrasados,
+      metadata: {
+        totalRegistros: rows.length,
+        trabajosAtrasados: trabajosAtrasados.length,
+        timestamp: new Date().toISOString(),
+        estadisticas: {
+          promedioAtraso: trabajosAtrasados.reduce((acc, job) => acc + job.delayDays, 0) / trabajosAtrasados.length,
+          maxAtraso: Math.max(...trabajosAtrasados.map(job => job.delayDays)),
+          minAtraso: Math.min(...trabajosAtrasados.map(job => job.delayDays))
+        }
+      }
+    };
+
+    console.log('\n=== RESPUESTA FINAL ===', {
+      totalTrabajos: trabajosAtrasados.length,
+      timestamp: responseData.metadata.timestamp,
+      estadisticas: responseData.metadata.estadisticas
+    });
+    
+    return Response.json(responseData, {
+      headers: {
+        'Cache-Control': 'no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Last-Modified': new Date().toUTCString(),
+        'ETag': Math.random().toString(36).substring(7)
+      }
+    });
 
   } catch (error) {
     console.error('Error en delayed-jobs:', error)
-    return Response.json({ error: error.message }, { status: 500 })
+    return Response.json(
+      { 
+        error: error.message,
+        timestamp: new Date().toISOString()
+      }, 
+      { 
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      }
+    )
   }
 }

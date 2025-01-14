@@ -7,7 +7,7 @@ import { delayedJobsQueryConfig, queryUtils } from '@/config/queryConfig'
 export function useDelayedJobs() {
   const queryClient = useQueryClient()
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data: responseData, isLoading, error, refetch } = useQuery({
     queryKey: queryUtils.generateQueryKey('delayed-jobs'),
     queryFn: async () => {
       console.log('🔄 Iniciando fetch de trabajos atrasados...')
@@ -16,28 +16,31 @@ export function useDelayedJobs() {
         
         console.log('📦 Respuesta de trabajos atrasados:', {
           tipo: typeof response,
-          esArray: Array.isArray(response),
-          cantidad: Array.isArray(response) ? response.length : 0,
-          timestamp: new Date().toISOString()
+          tieneData: Boolean(response?.data),
+          tieneMetadata: Boolean(response?.metadata),
+          timestamp: response?.metadata?.timestamp || new Date().toISOString()
         })
 
+        // Extraer los trabajos de la nueva estructura de respuesta
+        const trabajos = response?.data || response || []
+
         // Análisis detallado de trabajos atrasados
-        if (Array.isArray(response)) {
-          const estadisticas = response.reduce((acc, trabajo) => {
+        if (Array.isArray(trabajos)) {
+          const estadisticas = trabajos.reduce((acc, trabajo) => {
             acc.totalDiasAtraso += trabajo.delayDays || 0
-            acc.porEstado[trabajo.estado] = (acc.porEstado[trabajo.estado] || 0) + 1
+            acc.porEstado[trabajo.status] = (acc.porEstado[trabajo.status] || 0) + 1
             return acc
           }, { totalDiasAtraso: 0, porEstado: {} })
 
           console.log('📊 Estadísticas de trabajos atrasados:', {
-            total: response.length,
-            promedioAtraso: response.length ? (estadisticas.totalDiasAtraso / response.length).toFixed(1) : 0,
+            total: trabajos.length,
+            promedioAtraso: trabajos.length ? (estadisticas.totalDiasAtraso / trabajos.length).toFixed(1) : 0,
             distribucionEstados: estadisticas.porEstado,
-            timestamp: new Date().toISOString()
+            timestamp: response?.metadata?.timestamp || new Date().toISOString()
           })
         }
 
-        return response
+        return trabajos
       } catch (error) {
         console.error('❌ Error al obtener trabajos atrasados:', {
           mensaje: error.message,
@@ -48,10 +51,11 @@ export function useDelayedJobs() {
     },
     ...delayedJobsQueryConfig,
     staleTime: 0,
-    cacheTime: 1000 * 30, // Reducido a 30 segundos
+    cacheTime: 1000 * 30,
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
-    refetchOnReconnect: true
+    refetchOnReconnect: true,
+    refetchInterval: 60000 // Refetch automático cada minuto
   })
 
   const forceRefresh = async () => {
@@ -73,21 +77,29 @@ export function useDelayedJobs() {
     
     // Realizar el refetch
     const result = await refetch()
+    const datosNuevos = result.data
     
     // Comparar datos
-    const datosNuevos = result.data
-    console.log('📊 Comparación de datos:', {
+    const cambios = {
       cantidadAnterior: Array.isArray(datosAnteriores) ? datosAnteriores.length : 0,
       cantidadNueva: Array.isArray(datosNuevos) ? datosNuevos.length : 0,
-      cambio: JSON.stringify(datosAnteriores) !== JSON.stringify(datosNuevos),
+      huboActualizacion: JSON.stringify(datosAnteriores) !== JSON.stringify(datosNuevos),
       timestamp: new Date().toISOString()
-    })
+    }
+    
+    console.log('📊 Comparación de datos:', cambios)
+    
+    // Si no hubo cambios, forzar una actualización del caché
+    if (!cambios.huboActualizacion) {
+      console.log('⚠️ No se detectaron cambios, forzando actualización del caché...')
+      await queryClient.resetQueries(queryUtils.generateQueryKey('delayed-jobs'))
+    }
     
     return result
   }
 
   return {
-    data,
+    data: responseData,
     isLoading,
     error,
     refetch: forceRefresh

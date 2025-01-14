@@ -127,24 +127,42 @@ export async function GET(request) {
     // Agregar timestamp a la respuesta
     const responseData = {
       timestamp: new Date().toISOString(),
-      data: trabajosAgrupados
+      data: trabajosAgrupados,
+      metadata: {
+        totalRegistros: rows.length,
+        trabajosProcesados: trabajosFiltrados.length,
+        actualizadoEn: new Date().toISOString()
+      }
     };
+
+    console.log('Enviando respuesta:', {
+      timestamp: responseData.timestamp,
+      totalTrabajos: Object.values(trabajosAgrupados).reduce((acc, estado) => 
+        acc + Object.values(estado.jobs).reduce((sum, jobs) => sum + jobs.length, 0), 0
+      )
+    });
 
     return NextResponse.json(responseData, {
       headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Cache-Control': 'no-store, must-revalidate',
         'Pragma': 'no-cache',
-        'Expires': '0'
+        'Expires': '0',
+        'Last-Modified': new Date().toUTCString(),
+        'ETag': Math.random().toString(36).substring(7)
       }
     });
   } catch (error) {
     console.error('Error en API de producción:', error);
     return NextResponse.json(
-      { error: 'Error al procesar la solicitud', details: error.message },
+      { 
+        error: 'Error al procesar la solicitud', 
+        details: error.message,
+        timestamp: new Date().toISOString()
+      },
       { 
         status: 500,
         headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Cache-Control': 'no-store, must-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0'
         }
