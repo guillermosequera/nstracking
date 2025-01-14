@@ -216,20 +216,27 @@ export default function AdminProductionView() {
     
     setIsRefreshing(true);
     console.log('Iniciando actualización de datos de producción...');
+    console.log('Estado actual de trabajosAgrupados:', trabajosAgrupados);
     
     try {
       await refetch();
-      console.log('Datos de producción actualizados exitosamente');
+      console.log('Refetch completado');
+      console.log('Nuevo estado de trabajosAgrupados:', trabajosAgrupados);
+      
       // Validar si hay celda seleccionada y los datos existen
       if (selectedCell && trabajosAgrupados) {
         const { estado, categoria } = selectedCell;
         const estadoExiste = trabajosAgrupados[estado];
+        console.log('Validando celda seleccionada:', { estado, categoria, estadoExiste });
         if (!estadoExiste) {
           setSelectedCell(null);
         }
       }
+    } catch (error) {
+      console.error('Error durante el refetch:', error);
     } finally {
       setTimeout(() => {
+        console.log('Estado final de trabajosAgrupados:', trabajosAgrupados);
         setIsRefreshing(false);
       }, 1000);
     }
