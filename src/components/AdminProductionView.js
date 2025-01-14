@@ -220,13 +220,20 @@ export default function AdminProductionView() {
     try {
       await refetch();
       console.log('Datos de producción actualizados exitosamente');
+      // Validar si hay celda seleccionada y los datos existen
+      if (selectedCell && trabajosAgrupados) {
+        const { estado, categoria } = selectedCell;
+        const estadoExiste = trabajosAgrupados[estado];
+        if (!estadoExiste) {
+          setSelectedCell(null);
+        }
+      }
     } finally {
-      // Asegurar un mínimo de 1 segundo para la animación
       setTimeout(() => {
         setIsRefreshing(false);
       }, 1000);
     }
-  }, [isRefreshing, refetch]);
+  }, [isRefreshing, refetch, selectedCell, trabajosAgrupados]);
 
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState error={error} />;
