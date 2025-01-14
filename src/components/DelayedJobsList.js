@@ -58,63 +58,61 @@ export default function DelayedJobsList() {
     }
   }, [sortByDate])
 
-  // Memoizar los trabajos mostrados
+  // Memoizar los trabajos mostrados para evitar recálculos
   const displayedJobs = useMemo(() => {
-    if (!jobs || !Array.isArray(jobs)) return []
-    const trabajosAtrasados = jobs.filter(job => job.delayDays > 0)
-    return trabajosAtrasados.slice(0, displayCount)
-  }, [jobs, displayCount])
+    if (!jobs || !Array.isArray(jobs)) return [];
+    const trabajosAtrasados = jobs.filter(job => job.delayDays > 0);
+    return trabajosAtrasados.slice(0, displayCount);
+  }, [jobs, displayCount]);
 
   // Memoizar si hay más trabajos
   const hasMore = useMemo(() => {
-    if (!jobs || !Array.isArray(jobs)) return false
-    const trabajosAtrasados = jobs.filter(job => job.delayDays > 0)
-    return displayCount < trabajosAtrasados.length
-  }, [jobs, displayCount])
+    if (!jobs || !Array.isArray(jobs)) return false;
+    const trabajosAtrasados = jobs.filter(job => job.delayDays > 0);
+    return displayCount < trabajosAtrasados.length;
+  }, [jobs, displayCount]);
 
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) return;
     
     setIsRefreshing(true);
-    console.log('Iniciando actualización de trabajos atrasados...');
+    console.log('🔄 Iniciando actualización de trabajos atrasados...');
     
     try {
-      console.log('Estado actual antes del refetch:', {
-        trabajosActuales: jobs?.length || 0,
-        expandido: expandedJob,
-        mostrados: displayCount
-      });
-      
       const result = await refetch();
       
-      console.log('Resultado del refetch:', {
-        success: result.isSuccess,
-        trabajosNuevos: result.data?.length || 0,
-        error: result.error
-      });
+      if (result.isSuccess) {
+        console.log('✅ Datos actualizados:', {
+          totalTrabajos: Array.isArray(result.data) ? result.data.length : 0,
+          timestamp: new Date().toISOString()
+        });
 
-      // Resetear estados de visualización si hay cambios
-      if (result.data?.length !== jobs?.length) {
-        setDisplayCount(ITEMS_PER_PAGE);
-        setExpandedJob(null);
+        // Solo resetear estados si cambia la cantidad de trabajos
+        if (result.data?.length !== jobs?.length) {
+          setDisplayCount(ITEMS_PER_PAGE);
+          setExpandedJob(null);
+        }
+      } else {
+        console.error('❌ Error al actualizar:', result.error);
       }
     } catch (error) {
-      console.error('Error durante el refetch:', error);
+      console.error('❌ Error durante el refetch:', error);
     } finally {
-      // Asegurar un mínimo de tiempo para la animación
+      // Usar un timeout más corto ya que no recargamos toda la UI
       setTimeout(() => {
         setIsRefreshing(false);
-      }, 1000);
+      }, 500);
     }
-  }, [isRefreshing, refetch, jobs?.length, expandedJob, displayCount]);
+  }, [isRefreshing, refetch, jobs?.length]);
 
-  const handleLoadMore = () => {
-    setDisplayCount(prev => prev + ITEMS_PER_PAGE)
-  }
+  // Memoizar el handler para cargar más
+  const handleLoadMore = useCallback(() => {
+    setDisplayCount(prev => prev + ITEMS_PER_PAGE);
+  }, []);
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorState error={error} />
-  if (!jobs || !Array.isArray(jobs) || jobs.length === 0) return <EmptyState />
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState error={error} />;
+  if (!jobs || !Array.isArray(jobs) || jobs.length === 0) return <EmptyState />;
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">

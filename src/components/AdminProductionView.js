@@ -222,65 +222,58 @@ export default function AdminProductionView() {
     if (isRefreshing) return;
     
     setIsRefreshing(true);
-    console.log('Iniciando actualización de datos de producción...');
+    console.log('🔄 Iniciando actualización de datos de producción...');
     
     try {
-      console.log('Estado actual antes del refetch:', {
-        tipo: typeof trabajosAgrupados,
-        keys: Object.keys(trabajosAgrupados),
-        muestra: trabajosAgrupados
-      });
-      
       const result = await refetch();
       
-      console.log('Resultado del refetch:', {
-        success: result.isSuccess,
-        data: result.data,
-        error: result.error
-      });
-      
-      // Validar si hay celda seleccionada y los datos existen
-      if (selectedCell && result.data) {
-        const { estado, categoria } = selectedCell;
-        const estadoExiste = result.data[estado];
-        console.log('Validando celda seleccionada:', { 
-          estado, 
-          categoria, 
-          estadoExiste,
-          estadosDisponibles: Object.keys(result.data)
+      if (result.isSuccess) {
+        console.log('✅ Datos actualizados:', {
+          totalTrabajos: Object.values(result.data || {}).reduce((acc, estado) => 
+            acc + Object.values(estado.jobs || {}).reduce((sum, jobs) => sum + jobs.length, 0), 0
+          )
         });
-        if (!estadoExiste) {
-          setSelectedCell(null);
+
+        // Solo actualizar la celda seleccionada si es necesario
+        if (selectedCell && result.data) {
+          const { estado, categoria } = selectedCell;
+          const estadoExiste = result.data[estado];
+          if (!estadoExiste) {
+            setSelectedCell(null);
+          }
         }
+      } else {
+        console.error('❌ Error al actualizar:', result.error);
       }
     } catch (error) {
-      console.error('Error durante el refetch:', error);
+      console.error('❌ Error durante el refetch:', error);
     } finally {
-      // Asegurar un mínimo de tiempo para la animación
+      // Usar un timeout más corto ya que no recargamos toda la UI
       setTimeout(() => {
         setIsRefreshing(false);
-      }, 1000);
+      }, 500);
     }
-  }, [isRefreshing, refetch, selectedCell, trabajosAgrupados]);
+  }, [isRefreshing, refetch, selectedCell]);
 
-  if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState error={error} />;
-
-  const handleCellClick = (estado, categoria) => {
+  // Memoizar handlers para evitar recreaciones
+  const handleCellClick = useCallback((estado, categoria) => {
     setSelectedCell(prev => 
       prev?.estado === estado && prev?.categoria === categoria 
         ? null 
         : { estado, categoria }
     );
-  };
+  }, []);
 
-  const handleTotalClick = (estado) => {
+  const handleTotalClick = useCallback((estado) => {
     setSelectedCell(prev => 
       prev?.estado === estado && prev?.categoria === 'total'
         ? null 
         : { estado, categoria: 'total' }
     );
-  };
+  }, []);
+
+  if (isLoading) return <LoadingState />;
+  if (error) return <ErrorState error={error} />;
 
   return (
     <div className="w-full max-w-[95vw] mx-auto space-y-4 p-2 sm:p-4 md:p-6">
