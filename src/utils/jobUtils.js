@@ -409,6 +409,8 @@ export const fetchDelayedJobs = async () => {
         'Pragma': 'no-cache',
         'Expires': '0'
       },
+      cache: 'no-store',
+      next: { revalidate: 0 }
     });
 
     if (!response.ok) {
@@ -417,7 +419,10 @@ export const fetchDelayedJobs = async () => {
     }
 
     const data = await response.json();
-    console.log(`Recibidos ${data.length} trabajos atrasados`);
+    console.log('Datos de trabajos atrasados recibidos:', {
+      cantidad: Array.isArray(data) ? data.length : 0,
+      timestamp: new Date().toISOString()
+    });
     return data;
 
   } catch (error) {
@@ -452,6 +457,8 @@ export const fetchProductionJobs = async () => {
         'Pragma': 'no-cache',
         'Expires': '0'
       },
+      cache: 'no-store',
+      next: { revalidate: 0 }
     });
 
     if (!response.ok) {
@@ -462,7 +469,8 @@ export const fetchProductionJobs = async () => {
     const data = await response.json();
     console.log('Datos de producción recibidos:', {
       totalEstados: Object.keys(data).length,
-      estados: Object.keys(data)
+      estados: Object.keys(data),
+      timestamp: new Date().toISOString()
     });
     return data;
   } catch (error) {
