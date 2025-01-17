@@ -2,7 +2,8 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-import { useProductionJobs } from '../hooks/useProductionJobs';
+import useSWR from 'swr';
+import { fetchProductionJobs } from '@/utils/jobUtils';
 import { useDate } from '@/hooks/useDate';
 import { DATE_FORMATS } from '@/hooks/useDate/constants';
 import {
@@ -99,7 +100,17 @@ export default function AdminProductionView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { data: session } = useSession();
   const { parseDate, formatDate, toChileTime } = useDate();
-  const { trabajosAgrupados = {}, isLoading, error, refetch } = useProductionJobs();
+
+  // Reemplazar useProductionJobs con useSWR
+  const { data: response, error, mutate } = useSWR('/api/production', fetchProductionJobs, {
+    refreshInterval: 30000, // Refrescar cada 30 segundos
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    dedupingInterval: 5000
+  });
+
+  const trabajosAgrupados = response?.data || {};
+  const isLoading = !response && !error;
 
   console.log('AdminProductionView - trabajosAgrupados recibidos:', {
     tipo: typeof trabajosAgrupados,
@@ -218,6 +229,7 @@ export default function AdminProductionView() {
     }, 0);
   }, [estadosOrdenados, calcularTotal]);
 
+  // Actualizar handleRefresh para usar mutate de SWR
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) return;
     
@@ -225,35 +237,32 @@ export default function AdminProductionView() {
     console.log('🔄 Iniciando actualización de datos de producción...');
     
     try {
-      const result = await refetch();
+      const refreshedData = await mutate();
       
-      if (result.isSuccess) {
+      if (refreshedData) {
         console.log('✅ Datos actualizados:', {
-          totalTrabajos: Object.values(result.data || {}).reduce((acc, estado) => 
+          totalTrabajos: Object.values(refreshedData.data || {}).reduce((acc, estado) => 
             acc + Object.values(estado.jobs || {}).reduce((sum, jobs) => sum + jobs.length, 0), 0
           )
         });
 
         // Solo actualizar la celda seleccionada si es necesario
-        if (selectedCell && result.data) {
+        if (selectedCell && refreshedData.data) {
           const { estado, categoria } = selectedCell;
-          const estadoExiste = result.data[estado];
+          const estadoExiste = refreshedData.data[estado];
           if (!estadoExiste) {
             setSelectedCell(null);
           }
         }
-      } else {
-        console.error('❌ Error al actualizar:', result.error);
       }
     } catch (error) {
-      console.error('❌ Error durante el refetch:', error);
+      console.error('❌ Error durante la actualización:', error);
     } finally {
-      // Usar un timeout más corto ya que no recargamos toda la UI
       setTimeout(() => {
         setIsRefreshing(false);
       }, 500);
     }
-  }, [isRefreshing, refetch, selectedCell]);
+  }, [isRefreshing, mutate, selectedCell]);
 
   // Memoizar handlers para evitar recreaciones
   const handleCellClick = useCallback((estado, categoria) => {

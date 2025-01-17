@@ -4,7 +4,8 @@ import { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
-import { useDelayedJobs } from '@/hooks/useDelayedJobs'
+import useSWR from 'swr'
+import { fetchDelayedJobs } from '@/utils/jobUtils'
 import { useDate } from '@/hooks/useDate'
 import { DATE_FORMATS } from '@/hooks/useDate/constants'
 import { RefreshCw } from 'lucide-react'
@@ -24,7 +25,16 @@ const getJobColor = (delayDays) => {
 }
 
 export default function DelayedJobsList() {
-  const { data: jobs, isLoading, error, refetch } = useDelayedJobs()
+  const { data: response, error, mutate } = useSWR('/api/delayed-jobs', fetchDelayedJobs, {
+    refreshInterval: 30000, // Refrescar cada 30 segundos
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    dedupingInterval: 5000
+  });
+
+  const jobs = response?.data || [];
+  const isLoading = !response && !error;
+
   const { parseDate, formatDate, toChileTime } = useDate()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [expandedJob, setExpandedJob] = useState(null)
@@ -79,31 +89,28 @@ export default function DelayedJobsList() {
     console.log('🔄 Iniciando actualización de trabajos atrasados...');
     
     try {
-      const result = await refetch();
+      const refreshedData = await mutate();
       
-      if (result.isSuccess) {
+      if (refreshedData) {
         console.log('✅ Datos actualizados:', {
-          totalTrabajos: Array.isArray(result.data) ? result.data.length : 0,
+          totalTrabajos: Array.isArray(refreshedData.data) ? refreshedData.data.length : 0,
           timestamp: new Date().toISOString()
         });
 
         // Solo resetear estados si cambia la cantidad de trabajos
-        if (result.data?.length !== jobs?.length) {
+        if (refreshedData.data?.length !== jobs?.length) {
           setDisplayCount(ITEMS_PER_PAGE);
           setExpandedJob(null);
         }
-      } else {
-        console.error('❌ Error al actualizar:', result.error);
       }
     } catch (error) {
-      console.error('❌ Error durante el refetch:', error);
+      console.error('❌ Error durante la actualización:', error);
     } finally {
-      // Usar un timeout más corto ya que no recargamos toda la UI
       setTimeout(() => {
         setIsRefreshing(false);
       }, 500);
     }
-  }, [isRefreshing, refetch, jobs?.length]);
+  }, [isRefreshing, mutate, jobs?.length]);
 
   // Memoizar el handler para cargar más
   const handleLoadMore = useCallback(() => {
