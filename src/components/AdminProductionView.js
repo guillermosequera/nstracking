@@ -101,16 +101,25 @@ export default function AdminProductionView() {
   const { data: session } = useSession();
   const { parseDate, formatDate, toChileTime } = useDate();
 
-  // Reemplazar useProductionJobs con useSWR
-  const { data: response, error, mutate } = useSWR('/api/production', fetchProductionJobs, {
-    refreshInterval: 30000, // Refrescar cada 30 segundos
-    revalidateOnFocus: true,
-    revalidateOnReconnect: true,
-    dedupingInterval: 5000
+  const { data, error, isLoading, mutate } = useSWR('/api/production', fetchProductionJobs, {
+    refreshInterval: 30000,
+    revalidateOnFocus: false,
+    dedupingInterval: 5000,
+    onSuccess: (data) => {
+      console.log('✅ Datos actualizados:', {
+        timestamp: data.timestamp,
+        totalTrabajos: Object.values(data.data).reduce((acc, estado) => 
+          acc + Object.values(estado.jobs).reduce((sum, jobs) => sum + jobs.length, 0), 0
+        ),
+        metadata: data.metadata
+      });
+    },
+    onError: (err) => {
+      console.error('❌ Error al actualizar datos:', err);
+    }
   });
 
-  const trabajosAgrupados = response?.data || {};
-  const isLoading = !response && !error;
+  const trabajosAgrupados = data?.data || {};
 
   console.log('AdminProductionView - trabajosAgrupados recibidos:', {
     tipo: typeof trabajosAgrupados,
@@ -231,38 +240,24 @@ export default function AdminProductionView() {
 
   // Actualizar handleRefresh para usar mutate de SWR
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) return;
-    
-    setIsRefreshing(true);
-    console.log('🔄 Iniciando actualización de datos de producción...');
-    
     try {
-      const refreshedData = await mutate();
+      setIsRefreshing(true);
+      console.log('🔄 Iniciando actualización manual...');
       
-      if (refreshedData) {
-        console.log('✅ Datos actualizados:', {
-          totalTrabajos: Object.values(refreshedData.data || {}).reduce((acc, estado) => 
-            acc + Object.values(estado.jobs || {}).reduce((sum, jobs) => sum + jobs.length, 0), 0
-          )
-        });
+      const updatedData = await mutate();
+      
+      console.log('📊 Datos después de actualización:', {
+        timestamp: updatedData.timestamp,
+        totalRegistros: updatedData.metadata.totalRegistros,
+        actualizadoEn: updatedData.metadata.actualizadoEn
+      });
 
-        // Solo actualizar la celda seleccionada si es necesario
-        if (selectedCell && refreshedData.data) {
-          const { estado, categoria } = selectedCell;
-          const estadoExiste = refreshedData.data[estado];
-          if (!estadoExiste) {
-            setSelectedCell(null);
-          }
-        }
-      }
     } catch (error) {
-      console.error('❌ Error durante la actualización:', error);
+      console.error('❌ Error en actualización manual:', error);
     } finally {
-      setTimeout(() => {
-        setIsRefreshing(false);
-      }, 500);
+      setTimeout(() => setIsRefreshing(false), 500);
     }
-  }, [isRefreshing, mutate, selectedCell]);
+  }, [mutate]);
 
   // Memoizar handlers para evitar recreaciones
   const handleCellClick = useCallback((estado, categoria) => {
@@ -281,8 +276,12 @@ export default function AdminProductionView() {
     );
   }, []);
 
+  if (error) {
+    console.error('❌ Error en la vista de producción:', error);
+    return <div>Error al cargar los datos</div>;
+  }
+
   if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState error={error} />;
 
   return (
     <div className="w-full max-w-[95vw] mx-auto space-y-4 p-2 sm:p-4 md:p-6">

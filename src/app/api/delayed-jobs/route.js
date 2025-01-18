@@ -8,22 +8,29 @@ import {
   filtrarTrabajosPorEstado 
 } from '../job-processing/route'
 
-export async function GET() {
+export async function GET(request) {
   try {
-    console.log('\n=== INICIO ANÁLISIS DELAYED JOBS ===')
-    
-    const auth = await getAuthClient()
-    const sheets = google.sheets({ version: 'v4', auth })
-    
+    console.log('\n=== 🕒 INICIO PETICIÓN TRABAJOS ATRASADOS ===');
+    console.log('URL de la petición:', request.url);
+
+    const auth = getAuthClient();
+    const sheets = google.sheets({ version: 'v4', auth });
+
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetIds.status,
       range: 'A:F',
       valueRenderOption: 'FORMATTED_VALUE'
-    })
+    });
 
-    const rows = response.data.values || []
-    console.log(`Total de registros en la hoja: ${rows.length}`)
-    
+    const rows = response.data.values || [];
+    if (rows.length <= 1) return NextResponse.json({});
+
+    console.log('📊 Datos de Google Sheets:', {
+      totalFilas: rows.length,
+      ultimaFila: rows[rows.length - 1],
+      timestamp: new Date().toISOString()
+    });
+
     // 1. Procesamos el historial
     const historialTrabajos = procesarHistorialTrabajos(rows)
     console.log(`\nTotal de trabajos únicos encontrados: ${historialTrabajos.size}`)
@@ -120,26 +127,28 @@ export async function GET() {
     trabajosAtrasados.sort((a, b) => b.delayDays - a.delayDays)
     
     const responseData = {
+      timestamp: new Date().toISOString(),
       data: trabajosAtrasados,
       metadata: {
         totalRegistros: rows.length,
-        trabajosAtrasados: trabajosAtrasados.length,
-        timestamp: new Date().toISOString(),
-        estadisticas: {
-          promedioAtraso: trabajosAtrasados.reduce((acc, job) => acc + job.delayDays, 0) / trabajosAtrasados.length,
-          maxAtraso: Math.max(...trabajosAtrasados.map(job => job.delayDays)),
-          minAtraso: Math.min(...trabajosAtrasados.map(job => job.delayDays))
-        }
+        totalAtrasados: trabajosAtrasados.length,
+        promedioAtraso: trabajosAtrasados.reduce((acc, job) => acc + job.delayDays, 0) / trabajosAtrasados.length,
+        maxAtraso: Math.max(...trabajosAtrasados.map(job => job.delayDays)),
+        minAtraso: Math.min(...trabajosAtrasados.map(job => job.delayDays)),
+        actualizadoEn: new Date().toISOString()
       }
     };
 
-    console.log('\n=== RESPUESTA FINAL ===', {
-      totalTrabajos: trabajosAtrasados.length,
-      timestamp: responseData.metadata.timestamp,
-      estadisticas: responseData.metadata.estadisticas
+    console.log('📤 Preparando respuesta:', {
+      timestamp: responseData.timestamp,
+      totalAtrasados: trabajosAtrasados.length,
+      headers: {
+        'Cache-Control': 'no-store, must-revalidate',
+        'Last-Modified': new Date().toUTCString()
+      }
     });
-    
-    return Response.json(responseData, {
+
+    return NextResponse.json(responseData, {
       headers: {
         'Cache-Control': 'no-store, must-revalidate',
         'Pragma': 'no-cache',
@@ -148,14 +157,14 @@ export async function GET() {
         'ETag': Math.random().toString(36).substring(7)
       }
     });
-
   } catch (error) {
-    console.error('Error en delayed-jobs:', error)
-    return Response.json(
+    console.error('❌ Error en API de trabajos atrasados:', error);
+    return NextResponse.json(
       { 
-        error: error.message,
+        error: 'Error al procesar la solicitud', 
+        details: error.message,
         timestamp: new Date().toISOString()
-      }, 
+      },
       { 
         status: 500,
         headers: {
@@ -164,6 +173,6 @@ export async function GET() {
           'Expires': '0'
         }
       }
-    )
+    );
   }
 }

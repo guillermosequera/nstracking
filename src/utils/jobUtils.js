@@ -401,7 +401,15 @@ export const fetchQualityJobs = async (sheet) => {
 export const fetchDelayedJobs = async () => {
   try {
     const timestamp = new Date().getTime();
-    const response = await fetch(`/api/delayed-jobs?t=${timestamp}`, {
+    const url = `/api/delayed-jobs?t=${timestamp}`;
+    
+    console.log('🔄 Iniciando petición:', {
+      url,
+      timestamp: new Date().toISOString(),
+      cache: 'no-store'
+    });
+
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -413,21 +421,38 @@ export const fetchDelayedJobs = async () => {
       next: { revalidate: 0 }
     });
 
+    console.log('📨 Detalles de la respuesta:', {
+      status: response.status,
+      statusText: response.statusText,
+      type: response.type,
+      headers: {
+        etag: response.headers.get('etag'),
+        cacheControl: response.headers.get('cache-control'),
+        lastModified: response.headers.get('last-modified')
+      },
+      fromCache: response.headers.get('age') !== null,
+      timestamp: new Date().toISOString()
+    });
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Error al obtener los trabajos atrasados');
     }
 
     const data = await response.json();
-    console.log('Datos de trabajos atrasados recibidos:', {
-      cantidad: Array.isArray(data) ? data.length : 0,
+    
+    console.log('📦 Datos recibidos:', {
+      tipoRespuesta: typeof data,
+      tieneData: Boolean(data?.data),
+      tieneMetadata: Boolean(data?.metadata),
+      metadata: data?.metadata,
       timestamp: new Date().toISOString()
     });
-    return data;
 
+    return data;
   } catch (error) {
-    console.error('Error en fetchDelayedJobs:', error);
-    throw new Error(`No se pudieron cargar los trabajos atrasados: ${error.message}`);
+    console.error('❌ Error en fetchDelayedJobs:', error);
+    throw error;
   }
 };
 
@@ -449,7 +474,15 @@ export async function updateJobAreaAndStatus(jobId, areaChange, statusChange, us
 export const fetchProductionJobs = async () => {
   try {
     const timestamp = new Date().getTime();
-    const response = await fetch(`/api/production?t=${timestamp}`, {
+    const url = `/api/production?t=${timestamp}`;
+    
+    console.log('🔄 Iniciando petición:', {
+      url,
+      timestamp: new Date().toISOString(),
+      cache: 'no-store'
+    });
+
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -461,20 +494,38 @@ export const fetchProductionJobs = async () => {
       next: { revalidate: 0 }
     });
 
+    console.log('📨 Detalles de la respuesta:', {
+      status: response.status,
+      statusText: response.statusText,
+      type: response.type,
+      headers: {
+        etag: response.headers.get('etag'),
+        cacheControl: response.headers.get('cache-control'),
+        lastModified: response.headers.get('last-modified')
+      },
+      fromCache: response.headers.get('age') !== null,
+      timestamp: new Date().toISOString()
+    });
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Error al obtener los trabajos de producción');
     }
 
     const data = await response.json();
-    console.log('Datos de producción recibidos:', {
-      totalEstados: Object.keys(data).length,
-      estados: Object.keys(data),
+    
+    console.log('📦 Datos recibidos:', {
+      tipoRespuesta: typeof data,
+      tieneData: Boolean(data?.data),
+      tieneMetadata: Boolean(data?.metadata),
+      dataKeys: data?.data ? Object.keys(data.data) : [],
+      metadata: data?.metadata,
       timestamp: new Date().toISOString()
     });
+
     return data;
   } catch (error) {
-    console.error('Error en fetchProductionJobs:', error);
+    console.error('❌ Error en fetchProductionJobs:', error);
     throw error;
   }
 };

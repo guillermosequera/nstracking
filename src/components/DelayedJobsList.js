@@ -1,6 +1,6 @@
 'use client'
 // nstracking/src/components/DelayedJobsList.js
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/Button'
@@ -25,225 +25,100 @@ const getJobColor = (delayDays) => {
 }
 
 export default function DelayedJobsList() {
-  const { data: response, error, mutate } = useSWR('/api/delayed-jobs', fetchDelayedJobs, {
-    refreshInterval: 30000, // Refrescar cada 30 segundos
-    revalidateOnFocus: true,
-    revalidateOnReconnect: true,
-    dedupingInterval: 5000
+  const { data, error, isLoading, mutate } = useSWR('/api/delayed-jobs', fetchDelayedJobs, {
+    refreshInterval: 30000,
+    revalidateOnFocus: false,
+    dedupingInterval: 5000,
+    onSuccess: (data) => {
+      console.log('✅ Datos de trabajos atrasados actualizados:', {
+        timestamp: data.timestamp,
+        totalAtrasados: data.data.length,
+        metadata: data.metadata
+      });
+    },
+    onError: (err) => {
+      console.error('❌ Error al actualizar trabajos atrasados:', err);
+    }
   });
 
-  const jobs = response?.data || [];
-  const isLoading = !response && !error;
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [displayedJobs, setDisplayedJobs] = useState([]);
+  const [jobsToShow, setJobsToShow] = useState(10);
 
-  const { parseDate, formatDate, toChileTime } = useDate()
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [expandedJob, setExpandedJob] = useState(null)
-  const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE)
-
-  // Memoizar el ordenamiento por fecha usando parseDate
-  const sortByDate = useMemo(() => {
-    return (a, b) => {
-      const dateA = parseDate(a.fecha)?.date
-      const dateB = parseDate(b.fecha)?.date
-      if (!dateA && !dateB) return 0
-      if (!dateA) return 1
-      if (!dateB) return -1
-      return dateB.getTime() - dateA.getTime()
+  useEffect(() => {
+    if (data?.data) {
+      const sortedJobs = [...data.data].sort((a, b) => b.delayDays - a.delayDays);
+      setDisplayedJobs(sortedJobs.slice(0, jobsToShow));
     }
-  }, [parseDate])
-
-  // Funciones que usan el ordenamiento
-  const getLastStatus = useMemo(() => {
-    return (historial) => {
-      if (!Array.isArray(historial) || historial.length === 0) return ''
-      const sortedHistory = [...historial].sort(sortByDate)
-      return sortedHistory[0].estado
-    }
-  }, [sortByDate])
-
-  const getSortedHistory = useMemo(() => {
-    return (historial) => {
-      if (!Array.isArray(historial)) return []
-      return [...historial].sort(sortByDate)
-    }
-  }, [sortByDate])
-
-  // Memoizar los trabajos mostrados para evitar recálculos
-  const displayedJobs = useMemo(() => {
-    if (!jobs || !Array.isArray(jobs)) return [];
-    const trabajosAtrasados = jobs.filter(job => job.delayDays > 0);
-    return trabajosAtrasados.slice(0, displayCount);
-  }, [jobs, displayCount]);
-
-  // Memoizar si hay más trabajos
-  const hasMore = useMemo(() => {
-    if (!jobs || !Array.isArray(jobs)) return false;
-    const trabajosAtrasados = jobs.filter(job => job.delayDays > 0);
-    return displayCount < trabajosAtrasados.length;
-  }, [jobs, displayCount]);
+  }, [data, jobsToShow]);
 
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) return;
-    
-    setIsRefreshing(true);
-    console.log('🔄 Iniciando actualización de trabajos atrasados...');
-    
     try {
-      const refreshedData = await mutate();
+      setIsRefreshing(true);
+      console.log('🔄 Iniciando actualización manual de trabajos atrasados...');
       
-      if (refreshedData) {
-        console.log('✅ Datos actualizados:', {
-          totalTrabajos: Array.isArray(refreshedData.data) ? refreshedData.data.length : 0,
-          timestamp: new Date().toISOString()
-        });
+      const updatedData = await mutate();
+      
+      console.log('📊 Datos después de actualización:', {
+        timestamp: updatedData.timestamp,
+        totalRegistros: updatedData.metadata.totalRegistros,
+        totalAtrasados: updatedData.metadata.totalAtrasados,
+        actualizadoEn: updatedData.metadata.actualizadoEn
+      });
 
-        // Solo resetear estados si cambia la cantidad de trabajos
-        if (refreshedData.data?.length !== jobs?.length) {
-          setDisplayCount(ITEMS_PER_PAGE);
-          setExpandedJob(null);
-        }
-      }
     } catch (error) {
-      console.error('❌ Error durante la actualización:', error);
+      console.error('❌ Error en actualización manual:', error);
     } finally {
-      setTimeout(() => {
-        setIsRefreshing(false);
-      }, 500);
+      setTimeout(() => setIsRefreshing(false), 500);
     }
-  }, [isRefreshing, mutate, jobs?.length]);
+  }, [mutate]);
 
-  // Memoizar el handler para cargar más
   const handleLoadMore = useCallback(() => {
-    setDisplayCount(prev => prev + ITEMS_PER_PAGE);
+    setJobsToShow(prev => prev + 10);
   }, []);
 
-  if (isLoading) return <LoadingState />;
-  if (error) return <ErrorState error={error} />;
-  if (!jobs || !Array.isArray(jobs) || jobs.length === 0) return <EmptyState />;
+  if (error) {
+    console.error('❌ Error en la vista de trabajos atrasados:', error);
+    return <div>Error al cargar los datos</div>;
+  }
+
+  const hasMoreJobs = data?.data && displayedJobs.length < data.data.length;
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
+    <div className="p-4">
       <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-blue-600">Trabajos Atrasados</h1>
-          <Button
-            onClick={handleRefresh}
-            variant="outline"
-            size="sm"
-            disabled={isRefreshing}
-            className="flex items-center gap-2 bg-slate-300 hover:bg-slate-700 text-blue-600 border-slate-600"
-          >
-            <RefreshCw 
-              className={`h-4 w-4 ${isRefreshing ? 'animate-spin duration-1000' : ''}`}
-            />
-            <span>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</span>
-          </Button>
-        </div>
-        <div className="text-sm text-blue-500">
-          Mostrando {displayedJobs.length} de {jobs?.length || 0} trabajos
-        </div>
+        <h2 className="text-xl font-bold">Trabajos Atrasados</h2>
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className={`px-4 py-2 rounded ${
+            isRefreshing ? 'bg-gray-400' : 'bg-blue-500 hover:bg-blue-600'
+          } text-white transition-colors duration-200`}
+        >
+          {isRefreshing ? 'Actualizando...' : 'Actualizar'}
+        </button>
       </div>
 
-      <AnimatePresence>
-        {displayedJobs.map((job) => (
-          <motion.div
-            key={job.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3 }}
-            className={`mb-4 rounded-lg overflow-hidden shadow-lg ${getJobColor(job.delayDays)}`}
-          >
-            <div 
-              className="p-4 cursor-pointer"
-              onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
+      {isLoading ? (
+        <LoadingState />
+      ) : (
+        <>
+          <div className="space-y-4">
+            {displayedJobs.map((job, index) => (
+              <JobCard key={`${job.id}-${index}`} job={job} />
+            ))}
+          </div>
+
+          {hasMoreJobs && (
+            <button
+              onClick={handleLoadMore}
+              className="mt-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded transition-colors duration-200"
             >
-              <div className="flex justify-between items-center text-xl text-gray-100">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{job.number}</span>
-                  <Badge variant="secondary" className="bg-rose-900/70 text-yellow-500 border border-rose-800">
-                    {job.delayDays} {job.delayDays === 1 ? 'día' : 'días'} de atraso
-                  </Badge>
-                </div>
-                <Badge variant="secondary" className="bg-slate-700 border text-xl text-white border-slate-600">
-                  {getLastStatus(job.historial)}
-                </Badge>
-              </div>
-              <div className="text-xs mt-2 flex justify-between text-gray-300">
-                <span>Ingreso: {formatDate(toChileTime(job.entryDate))}</span>
-                <span className='bg-slate-700 border border-slate-600 rounded-md px-2 py-1'>
-                  Fecha de entrega: {formatDate(toChileTime(job.dueDate))}
-                </span>
-                <span>Usuario: {job.user}</span>
-              </div>
-            </div>
-
-            <AnimatePresence>
-              {expandedJob === job.id && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <div className="border-t border-slate-600">
-                    <table className="min-w-full divide-y divide-slate-600">
-                      <thead className="bg-slate-800/50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                            Fecha y Hora
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                            Área
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                            Estado
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                            Usuario
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-600">
-                        {job.historial && getSortedHistory(job.historial).map((entry, index) => (
-                          <tr key={index} className="hover:bg-slate-700/30">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                              {formatDate(toChileTime(entry.fecha))}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                              {entry.area}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <Badge variant="secondary" className="bg-slate-700 text-gray-200 border border-slate-600">
-                                {entry.estado}
-                              </Badge>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                              {entry.usuario}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-
-      {hasMore && (
-        <div className="mt-4 text-center">
-          <Button
-            onClick={handleLoadMore}
-            variant="outline"
-            className="bg-slate-800 hover:bg-slate-700 text-gray-100 border-slate-600"
-          >
-            Cargar más trabajos
-          </Button>
-        </div>
+              Cargar más
+            </button>
+          )}
+        </>
       )}
     </div>
-  )
+  );
 }

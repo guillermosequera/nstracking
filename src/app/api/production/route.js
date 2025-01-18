@@ -15,6 +15,9 @@ import {
 
 export async function GET(request) {
   try {
+    console.log('\n=== 🔄 INICIO PETICIÓN PRODUCCIÓN ===');
+    console.log('URL de la petición:', request.url);
+    
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
     
@@ -27,8 +30,11 @@ export async function GET(request) {
     const rows = response.data.values || [];
     if (rows.length <= 1) return NextResponse.json({});
 
-    console.log('\n=== INICIO PROCESAMIENTO DE TRABAJOS ===');
-    console.log(`Total de filas en la hoja: ${rows.length}`);
+    console.log('📊 Datos de Google Sheets:', {
+      totalFilas: rows.length,
+      ultimaFila: rows[rows.length - 1],
+      timestamp: new Date().toISOString()
+    });
 
     // Procesamos el historial usando la función común
     const historialTrabajos = procesarHistorialTrabajos(rows);
@@ -135,11 +141,15 @@ export async function GET(request) {
       }
     };
 
-    console.log('Enviando respuesta:', {
+    console.log('📤 Preparando respuesta:', {
       timestamp: responseData.timestamp,
       totalTrabajos: Object.values(trabajosAgrupados).reduce((acc, estado) => 
         acc + Object.values(estado.jobs).reduce((sum, jobs) => sum + jobs.length, 0), 0
-      )
+      ),
+      headers: {
+        'Cache-Control': 'no-store, must-revalidate',
+        'Last-Modified': new Date().toUTCString()
+      }
     });
 
     return NextResponse.json(responseData, {
@@ -152,7 +162,7 @@ export async function GET(request) {
       }
     });
   } catch (error) {
-    console.error('Error en API de producción:', error);
+    console.error('❌ Error en API de producción:', error);
     return NextResponse.json(
       { 
         error: 'Error al procesar la solicitud', 
