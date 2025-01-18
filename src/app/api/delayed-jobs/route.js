@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server';
 import { google } from 'googleapis'
 import { sheetIds } from '@/config/roles'
 import { getAuthClient } from '@/utils/googleAuth'
@@ -8,10 +9,12 @@ import {
   filtrarTrabajosPorEstado 
 } from '../job-processing/route'
 
-export async function GET(request) {
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export async function GET() {
   try {
     console.log('\n=== 🕒 INICIO PETICIÓN TRABAJOS ATRASADOS ===');
-    console.log('URL de la petición:', request.url);
 
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
@@ -139,22 +142,11 @@ export async function GET(request) {
       }
     };
 
-    console.log('📤 Preparando respuesta:', {
-      timestamp: responseData.timestamp,
-      totalAtrasados: trabajosAtrasados.length,
-      headers: {
-        'Cache-Control': 'no-store, must-revalidate',
-        'Last-Modified': new Date().toUTCString()
-      }
-    });
-
     return NextResponse.json(responseData, {
       headers: {
         'Cache-Control': 'no-store, must-revalidate',
         'Pragma': 'no-cache',
-        'Expires': '0',
-        'Last-Modified': new Date().toUTCString(),
-        'ETag': Math.random().toString(36).substring(7)
+        'Expires': '0'
       }
     });
   } catch (error) {

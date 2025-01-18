@@ -13,10 +13,12 @@ import {
   calcularDiasHabilesAtraso
 } from '../job-processing/route'
 
-export async function GET(request) {
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export async function GET() {
   try {
     console.log('\n=== 🔄 INICIO PETICIÓN PRODUCCIÓN ===');
-    console.log('URL de la petición:', request.url);
     
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
@@ -141,24 +143,11 @@ export async function GET(request) {
       }
     };
 
-    console.log('📤 Preparando respuesta:', {
-      timestamp: responseData.timestamp,
-      totalTrabajos: Object.values(trabajosAgrupados).reduce((acc, estado) => 
-        acc + Object.values(estado.jobs).reduce((sum, jobs) => sum + jobs.length, 0), 0
-      ),
-      headers: {
-        'Cache-Control': 'no-store, must-revalidate',
-        'Last-Modified': new Date().toUTCString()
-      }
-    });
-
     return NextResponse.json(responseData, {
       headers: {
         'Cache-Control': 'no-store, must-revalidate',
         'Pragma': 'no-cache',
-        'Expires': '0',
-        'Last-Modified': new Date().toUTCString(),
-        'ETag': Math.random().toString(36).substring(7)
+        'Expires': '0'
       }
     });
   } catch (error) {
