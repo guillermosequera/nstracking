@@ -119,7 +119,7 @@ export default function AdminProductionView() {
     }
   });
 
-  const trabajosAgrupados = data?.data || {};
+  const trabajosAgrupados = useMemo(() => data?.data || {}, [data?.data]);
 
   console.log('AdminProductionView - trabajosAgrupados recibidos:', {
     tipo: typeof trabajosAgrupados,
