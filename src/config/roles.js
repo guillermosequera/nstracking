@@ -53,6 +53,8 @@ export const roles = {
     workerMontage: process.env.NEXT_PUBLIC_SHEET_ID_MONTAGE_SHEET,
     workerDispatch: process.env.NEXT_PUBLIC_SHEET_ID_DISPATCH_SHEET,
     status: process.env.NEXT_PUBLIC_SHEET_ID_STATUS_SHEET,
+    statusHistory: process.env.NEXT_PUBLIC_SHEET_ID_STATUS_HISTORY_SHEET,
+    statusNVHistory: process.env.NEXT_PUBLIC_SHEET_ID_STATUS_NV_HISTORY_SHEET,
     merma: process.env.NEXT_PUBLIC_SHEET_ID_MERMA_SHEET,
     garantia: process.env.NEXT_PUBLIC_SHEET_ID_WARRANTY_SHEET,
     unassignedDispatch: process.env.NEXT_PUBLIC_SHEET_ID_UNASSIGNED_DISPATCH_SHEET,

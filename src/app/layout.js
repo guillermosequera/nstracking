@@ -5,6 +5,7 @@ import { Providers } from '@/components/Providers'
 import Navbar from '@/components/Navbar'
 import dynamic from 'next/dynamic'
 import { syncScheduler } from '@/services/syncScheduler'
+import { Analytics } from "@vercel/analytics/react"
 
 const ErrorBoundary = dynamic(() => import('@/components/ErrorBoundary'), {
   ssr: false
@@ -27,6 +28,7 @@ export default function RootLayout({ children }) {
               <main className="container mx-auto px-4 pt-16">
                 {children}
               </main>
+              <Analytics />
             </div>
           </ErrorBoundary>
         </Providers>
