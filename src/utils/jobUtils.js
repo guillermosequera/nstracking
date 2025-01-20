@@ -235,7 +235,7 @@ export const addDispatchJob = async (jobData, userEmail) => {
       timestamp: new Date().toISOString(),
       company: jobData.company || 'Sin Asignar', // Columna C: Empresa
       client: jobData.client || '',
-      invoice: jobData.invoiceNumber || '',
+      invoiceNumber: jobData.invoiceNumber || '',
       shippingCompany: jobData.shippingCompany || '',
       shippingOrder: jobData.shippingOrder || '',
       userEmail: userEmail,
