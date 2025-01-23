@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 const areas = [
   {
     name: "Bodega",
-    options: ["Compras por quiebre", "Picking", "Stock ar", "NV quiebre sin compra", "Quiebre por armazon","Lensware 1", "Anulada"]
+    options: ["Compras por quiebre", "Picking", "Stock ar", "NV quiebre sin compra", "Quiebre por armazon", "Anulada"]
   },
   {
     name: "Control Calidad",
