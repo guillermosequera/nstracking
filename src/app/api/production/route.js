@@ -23,23 +23,51 @@ export async function GET() {
     const auth = getAuthClient();
     const sheets = google.sheets({ version: 'v4', auth });
     
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: sheetIds.status,
-      range: 'A:F',
-      valueRenderOption: 'FORMATTED_VALUE'
-    });
+    // Obtener datos de las tres hojas
+    const [statusResponse, historyResponse, nvHistoryResponse] = await Promise.all([
+      sheets.spreadsheets.values.get({
+        spreadsheetId: sheetIds.status,
+        range: 'A:F',
+        valueRenderOption: 'FORMATTED_VALUE'
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: sheetIds.statusHistory,
+        range: 'A:F',
+        valueRenderOption: 'FORMATTED_VALUE'
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: sheetIds.statusNVHistory,
+        range: 'A:F',
+        valueRenderOption: 'FORMATTED_VALUE'
+      })
+    ]);
 
-    const rows = response.data.values || [];
-    if (rows.length <= 1) return NextResponse.json({});
+    // Extraer y combinar filas de las tres hojas
+    const statusRows = statusResponse.data.values || [];
+    const historyRows = historyResponse.data.values || [];
+    const nvHistoryRows = nvHistoryResponse.data.values || [];
 
-    console.log('📊 Datos de Google Sheets:', {
-      totalFilas: rows.length,
-      ultimaFila: rows[rows.length - 1],
+    // Combinar todas las filas (excluyendo headers si existen)
+    const allRows = [
+      ...statusRows.slice(1),
+      ...historyRows.slice(1),
+      ...nvHistoryRows.slice(1)
+    ];
+
+    if (allRows.length === 0) return NextResponse.json({});
+
+    console.log('📊 Datos combinados de Google Sheets:', {
+      totalFilas: allRows.length,
+      filasPorHoja: {
+        status: statusRows.length - 1,
+        history: historyRows.length - 1,
+        nvHistory: nvHistoryRows.length - 1
+      },
       timestamp: new Date().toISOString()
     });
 
     // Procesamos el historial usando la función común
-    const historialTrabajos = procesarHistorialTrabajos(rows);
+    const historialTrabajos = procesarHistorialTrabajos(allRows);
     console.log(`Total de trabajos únicos: ${historialTrabajos.size}`);
 
     // Filtramos los trabajos usando la función común
@@ -137,7 +165,7 @@ export async function GET() {
       timestamp: new Date().toISOString(),
       data: trabajosAgrupados,
       metadata: {
-        totalRegistros: rows.length,
+        totalRegistros: allRows.length,
         trabajosProcesados: trabajosFiltrados.length,
         actualizadoEn: new Date().toISOString()
       }
