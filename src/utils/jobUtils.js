@@ -265,11 +265,16 @@ export const addDispatchJob = async (jobData, userEmail) => {
   }
 };
 
-export const fetchJobStatus = async (jobNumber) => {
-  console.log(`Fetching status for job: ${jobNumber}`);
+export const fetchJobStatus = async (searchValue, searchType = 'nv') => {
+  console.log(`Fetching status with: ${searchType} - ${searchValue}`);
   
   try {
-    const response = await fetch(`/api/status?jobNumber=${jobNumber}`, {
+    const params = new URLSearchParams({
+      searchValue,
+      searchType: searchType.toLowerCase()
+    });
+
+    const response = await fetch(`/api/status?${params.toString()}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -283,7 +288,7 @@ export const fetchJobStatus = async (jobNumber) => {
     }
 
     const data = await response.json();
-    console.log(`Processed ${data.length} records for job ${jobNumber}`);
+    console.log(`Processed ${data.length} records for search: ${searchType} - ${searchValue}`);
     
     return data;
   } catch (error) {

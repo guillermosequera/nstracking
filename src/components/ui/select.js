@@ -2,7 +2,7 @@
 import React from 'react';
 
 export const Select = React.forwardRef(({ 
-  options, 
+  options = [],
   value, 
   onValueChange, 
   placeholder, 
@@ -24,7 +24,7 @@ export const Select = React.forwardRef(({
           {placeholder}
         </option>
       )}
-      {options.map((option) => (
+      {Array.isArray(options) && options.map((option) => (
         <option key={option.value} value={option.value}>
           {option.label}
         </option>
